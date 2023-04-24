@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "interpreters_3_12"
@@ -20,3 +20,16 @@ classifiers = [
 [project.urls]
 "Homepage" = "https://github.com/ericsnowcurrently/interpreters"
 "Bug Tracker" = "https://github.com/ericsnowcurrently/interpreters/issues"
+
+[tool.hatch.envs.default]
+extra-dependencies = [
+  "black",
+  "pytest",
+  "ruff",
+  "mypy",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.2.2"
+python_files = "*.py"  # Discover tests in every python file
+addopts = "-rA"
