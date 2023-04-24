@@ -67,4 +67,5 @@ select = [
 ]
 ignore = [
   "T201",  # "print" is OK
+  "S101",  # "assert" is OK
 ]
