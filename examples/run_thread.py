@@ -11,3 +11,7 @@ def test_run_thread():
     t.start()
     t.join()
     print("after")
+
+
+if __name__ == "__main__":
+    test_run_thread()

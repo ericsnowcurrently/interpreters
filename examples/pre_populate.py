@@ -17,3 +17,6 @@ def test_pre_populate():
     interp.run(tw.dedent("""
         some_lib.handle_request()
         """))
+
+if __name__ == "__main__":
+    test_pre_populate()

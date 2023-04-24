@@ -6,3 +6,6 @@ def test_run_isolated():
     print("before")
     interp.run('print("during")')
     print("after")
+
+if __name__ == "__main__":
+    test_run_isolated()
