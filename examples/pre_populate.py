@@ -1,5 +1,6 @@
-from test.support import interpreters
 import textwrap as tw
+from test.support import interpreters
+
 
 def wait_for_request(): ...
 

@@ -33,3 +33,38 @@ extra-dependencies = [
 minversion = "7.2.2"
 python_files = "*.py"  # Discover tests in every python file
 addopts = "-rA"
+
+#[mypy]
+#ignore_missing_imports = True
+
+[tool.ruff]
+select = [
+  "A",
+  "B",
+  "C",
+  "DTZ",
+  "E",
+  "EM",
+  "F",
+  "FBT",
+  "I",
+  "ICN",
+  "ISC",
+  "N",
+  "PLC",
+  "PLE",
+  "PLR",
+  "PLW",
+  "Q",
+  "RUF",
+  "S",
+  "SIM",
+  "T",
+  "TID",
+  "UP",
+  "W",
+  "YTT",
+]
+ignore = [
+  "T201",  # "print" is OK
+]
