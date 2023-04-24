@@ -1,10 +1,11 @@
 import textwrap as tw
 from test.support import interpreters
 
-INCOMPLETE = "TODO: exc.__cause__ has not yet been implemented"
+ISSUE = "TODO: exc.__cause__ has not yet been implemented"
 
 
 def test_exception_re_raising():
+    print(ISSUE); return
     interp = interpreters.create()
     try:
         try:
@@ -12,13 +13,11 @@ def test_exception_re_raising():
                 raise KeyError
                 """))
         except interpreters.RunFailedError:
-            # raise exc.__cause__    ## Not implemented yet, produces error
-            print(INCOMPLETE)
-            assert True
+            raise exc.__cause__    ## Not implemented yet, produces error
     except KeyError:
         print("got a KeyError from the subinterpreter")
 
 
 if __name__ == "__main__":
-    # test_exception_re_raising()
-    print(INCOMPLETE)
+    test_exception_re_raising()
+
