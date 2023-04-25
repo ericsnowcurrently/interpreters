@@ -34,8 +34,8 @@ minversion = "7.2.2"
 python_files = "*.py"  # Discover tests in every python file
 addopts = "-rA"
 
-#[mypy]
-#ignore_missing_imports = True
+[tool.mypy]
+ignore_missing_imports = true
 
 [tool.ruff]
 select = [
