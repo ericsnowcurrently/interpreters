@@ -12,7 +12,7 @@ def test_exception_re_raising():
             interp.run(tw.dedent("""
                 raise KeyError
                 """))
-        except interpreters.RunFailedError:
+        except interpreters.RunFailedError as exc:
             raise exc.__cause__    ## Not implemented yet, produces error
     except KeyError:
         print("got a KeyError from the subinterpreter")

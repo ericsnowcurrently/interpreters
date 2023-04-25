@@ -17,8 +17,8 @@ def test_share_file_descriptor():
                 print(line)
             os.write({s2}, b'')
             """))
-    with open('spamspamspam') as infile:
-        fd = infile.fileno().to_bytes(1, 'big')
+    with open("spamspamspam") as infile:
+        fd = infile.fileno().to_bytes(1, "big")
         os.write(s1, fd)
         os.read(r2, 1)
 

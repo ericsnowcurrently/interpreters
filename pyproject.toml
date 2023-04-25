@@ -68,4 +68,5 @@ select = [
 ignore = [
   "T201",  # "print" is OK
   "S101",  # "assert" is OK
+  "E702",  # Statements on one line OK
 ]
