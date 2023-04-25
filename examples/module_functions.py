@@ -1,7 +1,7 @@
 # Exercises all module functions, and shows that
 # the main Interpreter(id=0, ...) was already there
-from test.support import interpreters
 from pprint import pformat
+from test.support import interpreters
 
 
 def test_module_functions():
