@@ -22,6 +22,11 @@ def test_interpreter_class():
     show("Before thread.start()")
     thread.start()
     show("After thread.start()")
+    # interp.close()  # Produces RuntimeError
+    thread.join()
+    show("After thread.join()")
+    interp.close(); # OK because the interpreter is no longer running
+    # show("After interp.close()") # interp.is_running() fails
 
 
 if __name__ == "__main__":
