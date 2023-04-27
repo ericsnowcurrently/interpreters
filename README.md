@@ -2,7 +2,7 @@
 
 To use this directory you must first build the development
 version of CPython on your machine by following the instructions
-[here](https://devguide.python.org/getting-started/setup-building/#get-the-source-code). (This can seem intimidating but the instructions
+[here](https://devguide.python.org/getting-started/setup-building). (This can seem intimidating but the instructions
 are very clear and meticulous and you are likely to succeed on your
 first try).
 
