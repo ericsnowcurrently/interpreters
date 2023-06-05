@@ -2462,3 +2462,9 @@ PyInit__xxinterpchannels(void)
 {
     return PyModuleDef_Init(&moduledef);
 }
+
+PyMODINIT_FUNC
+PyInit__channels(void)
+{
+    return PyModuleDef_Init(&moduledef);
+}

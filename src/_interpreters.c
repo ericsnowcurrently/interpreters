@@ -863,3 +863,9 @@ PyInit__xxsubinterpreters(void)
 {
     return PyModuleDef_Init(&moduledef);
 }
+
+PyMODINIT_FUNC
+PyInit__interpreters(void)
+{
+    return PyModuleDef_Init(&moduledef);
+}
