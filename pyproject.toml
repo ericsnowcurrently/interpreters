@@ -9,7 +9,7 @@ version = "0.0.1"
 authors = [
   { name="Eric Snow", email="ericsnowcurrently@gmail.com" },
 ]
-description = "a placeholder"
+description = "Use this module to try out multiple interpreters and a per-interpreter GIL in Python 3.12.  Do not use this for anything important."
 readme = "README.md"
 requires-python = ">=3.12"
 classifiers = [
