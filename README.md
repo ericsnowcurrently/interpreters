@@ -1,8 +1,9 @@
 ## Setup
 
 To use this directory you must first build the development
-version of CPython on your machine by following the instructions
-[here](https://devguide.python.org/getting-started/setup-building). (This can seem intimidating but the instructions
+version of CPython 3.12 on your machine by following the instructions
+[here](https://devguide.python.org/getting-started/setup-building).
+(This can seem intimidating but the instructions
 are very clear and meticulous and you are likely to succeed on your
 first try).
 
@@ -12,6 +13,14 @@ you should see something like this:
 
 ```
 Python 3.12.0a7+
+```
+
+### Windows Note
+
+In Windows (and possibly other systems) you may need to get CPython 3.12
+using the `git` command-line command:
+```
+git clone --branch 3.12 https://github.com/python/cpython
 ```
 
 ### Testing the Examples
