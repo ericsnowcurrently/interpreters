@@ -23,6 +23,10 @@ using the `git` command-line command:
 git clone --branch 3.12 https://github.com/python/cpython
 ```
 
+Also, when you follow the build instructions you end up creating a debug version
+of Python and in Windows this will be given the special name `python_d.exe`. You'll
+need to copy this to `python.exe` and configure your path so it will be found.
+
 ### Testing the Examples
 
 After cloning this repo, use `pip` or `pipx` to (globally) install the `hatch`
