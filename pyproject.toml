@@ -11,7 +11,7 @@ authors = [
 ]
 description = "Use this module to try out multiple interpreters and a per-interpreter GIL in Python 3.12.  Do not use this for anything important."
 readme = "README.md"
-requires-python = "=3.12"
+requires-python = ">=3.12,<3.13"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: BSD License",
@@ -71,3 +71,14 @@ ignore = [
   "S101",  # "assert" is OK
   "E702",  # Statements on one line OK
 ]
+
+[tool.cibuildwheel]
+skip = ["pp*"]
+# Trigger an install of the package, but run nothing of note
+test-command = "echo Wheel installed"
+# Don't show a warning about not being able to test the ARM part of a wheel
+test-skip = ["*universal2:arm64"]
+
+# Force universal2 wheels on macOS
+[tool.cibuildwheel.macos]
+archs = ["universal2"]
