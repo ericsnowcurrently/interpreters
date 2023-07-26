@@ -2,8 +2,10 @@
 /* interpreters module */
 /* low-level access to interpreter primitives */
 
+#define Py_BUILD_CORE 1
+
 #include "Python.h"
-#include "interpreteridobject.h"
+#include "internal/pycore_interpreteridobject.h"
 
 
 #define MODULE_NAME "_xxsubinterpreters"
