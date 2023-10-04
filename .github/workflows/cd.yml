@@ -38,9 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: pypa/cibuildwheel@v2.14
-        env:
-          CIBW_PRERELEASE_PYTHONS: True
+      - uses: pypa/cibuildwheel@v2.16
 
       - uses: actions/upload-artifact@v3
         with:
