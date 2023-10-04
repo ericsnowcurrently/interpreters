@@ -2,6 +2,10 @@ name: CD
 
 on:
   workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - main
   release:
     types:
       - published
