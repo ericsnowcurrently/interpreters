@@ -22,6 +22,9 @@ classifiers = [
 "Homepage" = "https://github.com/ericsnowcurrently/interpreters"
 "Bug Tracker" = "https://github.com/ericsnowcurrently/interpreters/issues"
 
+[project.optional-dependencies]
+test = ["pytest"]
+
 [tool.hatch.envs.default]
 extra-dependencies = [
   "black",
