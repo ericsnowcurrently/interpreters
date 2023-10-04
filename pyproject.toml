@@ -73,12 +73,17 @@ ignore = [
 ]
 
 [tool.cibuildwheel]
+# Avoid PyPy
 skip = ["pp*"]
+
 # Trigger an install of the package, but run nothing of note
 test-command = "echo Wheel installed"
+
 # Don't show a warning about not being able to test the ARM part of a wheel
 test-skip = ["*universal2:arm64"]
 
+# Avoid 32-bit Windows
+windows.archs = ["auto64"]
+
 # Force universal2 wheels on macOS
-[tool.cibuildwheel.macos]
-archs = ["universal2"]
+macos.archs = ["universal2"]
