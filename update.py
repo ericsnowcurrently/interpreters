@@ -25,17 +25,74 @@ SRC_PY = [
     '/Lib/test/support/interpreters/queues.py',
     '/Lib/test/support/interpreters/channels.py',
 ]
+INCLUDES = [
+    '/Include/internal/pycore_abstract.h',
+    '/Include/internal/pycore_crossinterp.h',
+    '/Include/internal/pycore_interp.h',
+    '/Include/internal/pycore_initconfig.h',
+    '/Include/internal/pycore_long.h',
+    '/Include/internal/pycore_modsupport.h',
+    '/Include/internal/pycore_pybuffer.h',
+    '/Include/internal/pycore_pyerrors.h',
+    '/Include/internal/pycore_pystate.h',
+]
+INCLUDES_INDIRECT = [
+    '/Include/internal/pycore_lock.h',
+    '/Include/internal/pycore_time.h',
+    '/Include/cpython/pyatomic.h',
+    '/Include/cpython/pyatomic_gcc.h',
+    '/Include/cpython/pyatomic_msc.h',
+    '/Include/cpython/pyatomic_std.h',
+    '/Include/internal/pycore_ceval.h',
+    '/Include/internal/pycore_namespace.h',
+    '/Include/internal/pycore_typeobject.h',
+    '/Include/internal/pycore_weakref.h',
+    '/Include/internal/pycore_moduleobject.h',
+    '/Include/internal/pycore_critical_section.h',
+    '/Include/internal/pycore_ast_state.h',
+    '/Include/internal/pycore_atexit.h',
+    '/Include/internal/pycore_ceval_state.h',
+]
+INCLUDES_DUMMY = set([
+    # direct
+    '/Include/internal/pycore_abstract.h',
+    '/Include/internal/pycore_crossinterp.h',
+    '/Include/internal/pycore_interp.h',
+    '/Include/internal/pycore_initconfig.h',
+    '/Include/internal/pycore_long.h',
+    '/Include/internal/pycore_modsupport.h',
+    '/Include/internal/pycore_pybuffer.h',
+    '/Include/internal/pycore_pyerrors.h',
+    '/Include/internal/pycore_pystate.h',
+    # indirect
+    '/Include/internal/pycore_lock.h',
+    '/Include/internal/pycore_time.h',
+    '/Include/cpython/pyatomic.h',
+    '/Include/cpython/pyatomic_gcc.h',
+    '/Include/cpython/pyatomic_msc.h',
+    '/Include/cpython/pyatomic_std.h',
+    '/Include/internal/pycore_ceval.h',
+    '/Include/internal/pycore_namespace.h',
+    '/Include/internal/pycore_typeobject.h',
+    '/Include/internal/pycore_weakref.h',
+    '/Include/internal/pycore_moduleobject.h',
+    '/Include/internal/pycore_critical_section.h',
+    '/Include/internal/pycore_ast_state.h',
+    '/Include/internal/pycore_atexit.h',
+    '/Include/internal/pycore_ceval_state.h',
+])
 SRC_C = [
     '/Modules/_interpretersmodule.c',
     '/Modules/_interpqueuesmodule.c',
-    '/Modules/_channelsmodule.c',
+    '/Modules/_interpchannelsmodule.c',
+    '/Python/crossinterp.c',
 ]
 # Before PEP 734 is accepted and the impl. merged:
-SRC_C_OLD = [
-    '/Modules/_xxsubinterpretersmodule.c',
-    '/Modules/_xxinterpqueuesmodule.c',
-    '/Modules/_xxinterpchannelsmodule.c',
-]
+SRC_C_OLD = {
+    '/Modules/_interpretersmodule.c': '/Modules/_xxsubinterpretersmodule.c',
+    '/Modules/_interpqueuesmodule.c': '/Modules/_xxinterpqueuesmodule.c',
+    '/Modules/_interpchannelsmodule.c': '/Modules/_xxinterpchannelsmodule.c',
+}
 
 
 def write_metadata(repo, revision, files, branch=None, filename=None):
@@ -86,22 +143,72 @@ def resolve_revision(repo, revision):
     return rev, branch
 
 
-def _gh_download(org, repo, revision, path, srcdir, reltarget=None, *,
-                 _knowndirs=set()):
-    path = path.lstrip('/')
-    url = GH_DOWNLOAD.format(ORG=org, REPO=repo, REVISION=revision, PATH=path)
-    if reltarget:
-        target = os.path.join(srcdir, reltarget)
-        targetdir = os.path.dirname(target)
+def _resolve_download_url(org, repo, revision, path):
+    assert path.startswith('/'), repr(path)
+    if path.startswith('/Include/') and path in INCLUDES_DUMMY:
+        return f'<{path}>'
+    return GH_DOWNLOAD.format(ORG=org, REPO=repo, REVISION=revision,
+                              PATH=path.lstrip('/'))
+
+
+def _resolve_download_target(srcdir, path):
+    assert path.startswith('/'), repr(path)
+    if path.endswith('.py'):
+        assert '/interpreters/' in path, repr(path)
+        basename = path.split('/')[-1]
+        reltarget = f'interpreters/{basename}'
+    elif path.endswith('.c'):
+        reltarget = path.split('/')[-1]
+    elif path.startswith('/Include/'):
+        reltarget = path[1:]
     else:
-        target = os.path.join(srcdir, os.path.basename(path))
-        targetdir = srcdir
-    print(' + {}  <- {}'.format(target, url))
+        raise NotImplementedError(repr(path))
+    return os.path.join(srcdir, reltarget)
+
+
+def _download(url, target, *, _knowndirs=set()):
+    print(' + {:60}  <- {}'.format(target, url))
+
+    targetdir = os.path.dirname(target)
     if targetdir not in _knowndirs:
         os.makedirs(targetdir, exist_ok=True)
         _knowndirs.add(targetdir)
-    urlretrieve(url, target)
-    return target
+
+    if url.startswith('<'):
+        assert url.endswith('>'), repr(url)
+        with open(target, 'w'):
+            pass
+    else:
+        urlretrieve(url, target)
+
+
+def _fix_file(filename, fix):
+    with open(filename, 'r') as infile:
+        text = infile.read()
+    with open(f'{filename}.orig', 'w') as orig:
+        orig.write(text)
+    text = fix(text)
+    if text is None:
+        raise Exception(f'"fix" func {fix} returned None, expected str')
+    with open(filename, 'w') as outfile:
+        outfile.write(text)
+
+
+def clear_all(srcdir=None):
+    if srcdir is None:
+        srcdir = SRC_DIR
+
+    for path in SRC_PY + INCLUDES + SRC_C:
+        target = _resolve_download_target(srcdir, path)
+        try:
+            os.unlink(target)
+        except FileNotFoundError:
+            pass
+        target += '.orig'
+        try:
+            os.unlink(target)
+        except FileNotFoundError:
+            pass
 
 
 def download_all(repo, revision, srcdir=None):
@@ -113,29 +220,85 @@ def download_all(repo, revision, srcdir=None):
         raise ValueError(f'unsupported repo {repo!r}')
     org, repo_ = m.groups()
 
-    pyfiles = {}
+    files = {}
+
     for path in SRC_PY:
-        base = f'interpreters/{os.path.basename(path)}'
-        target = _gh_download(org, repo_, revision, path, srcdir, base)
-        assert path not in pyfiles, pyfiles
-        pyfiles[path] = target
+        assert path not in files, files
+        url = _resolve_download_url(org, repo_, revision, path)
+        target = _resolve_download_target(srcdir, path)
+        _download(url, target)
+        files[path] = target
 
     print()
-    cfiles = {}
-    try:
-        for path in SRC_C:
-            target = _gh_download(org, repo_, revision, path, srcdir)
-            assert path not in cfiles, cfiles
-            cfiles[path] = target
-    except HTTPError:
-        print('-- "new" files not found, falling back to old files --')
-        for path, base in zip(SRC_C_OLD, SRC_C):
-            base = os.path.basename(base)
-            target = _gh_download(org, repo_, revision, path, srcdir, base)
-            assert path not in cfiles, cfiles
-            cfiles[path] = target
+    dummies = []
+    for path in INCLUDES:
+        assert path not in files, files
+        url = _resolve_download_url(org, repo_, revision, path)
+        target = _resolve_download_target(srcdir, path)
+        if url.startswith('<'):
+            dummies.append((url, target))
+        else:
+            _download(url, target)
+            files[path] = target
 
-    return dict(**pyfiles, **cfiles)
+    print()
+    for path in INCLUDES_INDIRECT:
+        assert path not in files, files
+        url = _resolve_download_url(org, repo_, revision, path)
+        target = _resolve_download_target(srcdir, path)
+        if url.startswith('<'):
+            dummies.append((url, target))
+        else:
+            _download(url, target)
+            files[path] = target
+
+    print()
+    for url, target in dummies:
+        _download(url, target)
+        files[path] = target
+
+    print()
+    maybe_old = dict(SRC_C_OLD)
+    old = []
+    for path in SRC_C:
+        assert path not in files, files
+        url = _resolve_download_url(org, repo_, revision, path)
+        target = _resolve_download_target(srcdir, path)
+        if path in maybe_old:
+            oldpath = maybe_old.pop(path)
+            try:
+                _download(url, target)
+            except HTTPError:
+                print('-- "new" file not found, falling back to old file --')
+                old.append(path)
+                path = oldpath
+                assert path not in files, files
+                url = _resolve_download_url(org, repo_, revision, path)
+                _download(url, target)
+            files[path] = target
+            continue
+        _download(url, target)
+        files[path] = target
+    assert not maybe_old, (maybe_old, old)
+    assert not old or sorted(old) == sorted(SRC_C_OLD), (maybe_old, old)
+
+    return files
+
+
+def fix_all(files):
+    def fix_crossinterp_h(text):
+        # s/^struct _xid {/struct _xid_new {/
+        text = text.replace('struct _xid {', 'struct _xid_new {')
+        return text
+
+    for filename in files:
+        basename = os.path.basename(filename)
+        if basename == 'pycore_crossinterp.h':
+            fix = fix_crossinterp_h
+        else:
+            continue
+        print(f'+ fixing {filename}')
+        _fix_file(filename, fix)
 
 
 ##################################
@@ -162,7 +325,12 @@ def main(revision=None, repo=None):
     revision, branch = resolve_revision(repo, revision)
 
     print('downloading...')
+    clear_all()
     files = download_all(repo, revision)
+    print('...done')
+
+    print('applying fixes...')
+    fix_all(list(files.values()))
     print('...done')
 
     print('writing metadata...')
