@@ -1,10 +1,11 @@
 import glob
+import json
 import os
 import os.path
 import shutil
 import subprocess
 from urllib.parse import urlparse
-from urllib.request import urlretrieve
+from urllib.request import urlretrieve, urlopen
 from urllib.error import HTTPError
 
 
@@ -174,3 +175,23 @@ def download(url, target=None, *,
             urlretrieve(url, target)
 
     return target, url
+
+
+def read_path(baseurl, path, *, encoding=None):
+    url, _ = resolve_download_url(baseurl, path)
+    return read_url(url, encoding=encoding)
+
+
+def read_url(url, *, encoding=None):
+    if encoding == 'json':
+        read = json.load
+        encoding = None
+    else:
+        read = (lambda r: r.read())
+
+    with urlopen(url) as resp:
+        data = read(resp)
+
+    if encoding:
+        data = data.decode(encoding)
+    return data

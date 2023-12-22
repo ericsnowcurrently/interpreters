@@ -1,8 +1,6 @@
-import json
 import os.path
 import re
 import shutil
-from urllib.request import urlopen
 
 import _utils
 
@@ -74,6 +72,7 @@ class GitHubRepo:
     DOWNLOAD = 'https://raw.github.com/{ORG}/{REPO}/{REVISION}/{PATH}'
     COMMIT = 'https://api.github.com/repos/{ORG}/{REPO}/commits/{REF}'
     #BRANCH = 'https://api.github.com/repos/{ORG}/{REPO}/branches/{BRANCH}'
+    TREE = 'https://api.github.com/repos/{ORG}/{REPO}/git/trees/{SHA}'
 
     @classmethod
     def from_url(cls, url):
@@ -93,8 +92,7 @@ class GitHubRepo:
     def get_commit(self, ref):
         # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#get-a-commit
         url = self.COMMIT.format(ORG=self.org, REPO=self.name, REF=ref)
-        with urlopen(url) as resp:
-            data = json.load(resp)
+        data = _utils.read_url(url, encoding='json')
         rev = data['sha']
         assert rev
         branch = None if rev.startswith(ref) else ref
@@ -123,8 +121,33 @@ class GitHubRepo:
                                                  dummies=dummies)
         return target, url, path, revision, branch
 
+    def read(self, path, revision=None, *, encoding=None):
+        baseurl = self.DOWNLOAD.format(
+            ORG=self.org,
+            REPO=self.name,
+            REVISION=revision,
+            PATH='',
+        )
+        return _utils.read_path(baseurl, path, encoding=encoding)
 
-class RemoteRepo:
+
+class Repo:
+
+    def resolve_revision(self, ref):
+        raise NotImplementedError
+
+    def download(self, path, target, revision=None, *,
+                 altpath=None,
+                 makedirs=True,
+                 dummies=None,
+                 ):
+        raise NotImplementedError
+
+    def read(self, path, revision=None, *, encoding=None):
+        raise NotImplementedError
+
+
+class RemoteRepo(Repo):
 
     @classmethod
     def from_raw_url(cls, url, *, localremote=True):
@@ -181,9 +204,6 @@ class RemoteRepo:
             self._github = GitHubRepo(*github)
             return self._github
 
-    def clone(self, root, branch=None):
-        return Local.from_url(self.url, root, branch=branch)
-
     def resolve_revision(self, ref):
         gh = self._resolve_github()
         if gh:
@@ -209,8 +229,23 @@ class RemoteRepo:
         else:
             raise NotImplementedError
 
+    def read(self, path, revision=None, *, encoding=None):
+        if not revision:
+            revision = 'main'
 
-class LocalRepo:
+        gh = self._resolve_github()
+        if gh:
+            return gh.read(path, revision, encoding=encoding)
+        else:
+            raise NotImplementedError
+
+    # remote-specific methods
+
+    def clone(self, root, branch=None):
+        return Local.from_url(self.url, root, branch=branch)
+
+
+class LocalRepo(Repo):
 
     _GIT = GIT
 
@@ -259,6 +294,11 @@ class LocalRepo:
                  dummies=None,
                  ):
         raise NotImplementedError
+
+    def read(self, path, revision=None, *, encoding=None):
+        raise NotImplementedError
+
+    # local-specific methods
 
     def get_remote(self, name):
         raise NotImplementedError

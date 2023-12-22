@@ -6,8 +6,8 @@ import os.path
 import sys
 import textwrap
 
-import _git
 import _utils
+import _cpython
 
 
 ROOT = os.path.abspath(os.path.dirname(__file__))
@@ -18,45 +18,16 @@ REPO = os.path.join(ROOT, 'build', 'cpython')
 
 REPO_URL = 'https://github.com/python/cpython'
 
-
 SRC_PY = [
     '/Lib/interpreters/__init__.py',
     '/Lib/interpreters/queues.py',
     '/Lib/interpreters/channels.py',
 ]
-INCLUDES = [
-    '/Include/internal/pycore_abstract.h',
-    '/Include/internal/pycore_crossinterp.h',
-    '/Include/internal/pycore_interp.h',
-    '/Include/internal/pycore_initconfig.h',
-    '/Include/internal/pycore_long.h',
-    '/Include/internal/pycore_modsupport.h',
-    '/Include/internal/pycore_pybuffer.h',
-    '/Include/internal/pycore_pyerrors.h',
-    '/Include/internal/pycore_pystate.h',
-]
-INCLUDES_INDIRECT = [
-    '/Include/internal/pycore_lock.h',
-    '/Include/internal/pycore_time.h',
-    '/Include/cpython/pyatomic.h',
-    '/Include/cpython/pyatomic_gcc.h',
-    '/Include/cpython/pyatomic_msc.h',
-    '/Include/cpython/pyatomic_std.h',
-    '/Include/internal/pycore_ceval.h',
-    '/Include/internal/pycore_namespace.h',
-    '/Include/internal/pycore_typeobject.h',
-    '/Include/internal/pycore_weakref.h',
-    '/Include/internal/pycore_moduleobject.h',
-    '/Include/internal/pycore_critical_section.h',
-    '/Include/internal/pycore_ast_state.h',
-    '/Include/internal/pycore_atexit.h',
-    '/Include/internal/pycore_ceval_state.h',
-]
 SRC_C = [
     '/Modules/_interpretersmodule.c',
     '/Modules/_interpqueuesmodule.c',
     '/Modules/_interpchannelsmodule.c',
-    '/Python/crossinterp.c',
+#    '/Python/crossinterp.c',
 ]
 # Before PEP 734 is accepted and the impl. merged:
 PRE_PEP_734 = {
@@ -67,34 +38,31 @@ PRE_PEP_734 = {
     '/Modules/_interpqueuesmodule.c': '/Modules/_xxinterpqueuesmodule.c',
     '/Modules/_interpchannelsmodule.c': '/Modules/_xxinterpchannelsmodule.c',
 }
-DUMMIES = set([
-    # direct
-    '/Include/internal/pycore_abstract.h',
+
+#REQUIRED = [
+#    *SRC_PY,
+#    *SRC_C,
+##    '/Include/internal/pycore_abstract.h',
+#]
+INCOMPATIBLE = set([
     '/Include/internal/pycore_crossinterp.h',
-    '/Include/internal/pycore_interp.h',
-    '/Include/internal/pycore_initconfig.h',
-    '/Include/internal/pycore_long.h',
-    '/Include/internal/pycore_modsupport.h',
-    '/Include/internal/pycore_pybuffer.h',
-    '/Include/internal/pycore_pyerrors.h',
-    '/Include/internal/pycore_pystate.h',
-    # indirect
     '/Include/internal/pycore_lock.h',
-    '/Include/internal/pycore_time.h',
-    '/Include/cpython/pyatomic.h',
-    '/Include/cpython/pyatomic_gcc.h',
-    '/Include/cpython/pyatomic_msc.h',
-    '/Include/cpython/pyatomic_std.h',
-    '/Include/internal/pycore_ceval.h',
-    '/Include/internal/pycore_namespace.h',
-    '/Include/internal/pycore_typeobject.h',
-    '/Include/internal/pycore_weakref.h',
-    '/Include/internal/pycore_moduleobject.h',
-    '/Include/internal/pycore_critical_section.h',
-    '/Include/internal/pycore_ast_state.h',
-    '/Include/internal/pycore_atexit.h',
-    '/Include/internal/pycore_ceval_state.h',
 ])
+
+PUBLIC_NOT_USED = set([
+    '/Include/cpython/optimizer.h',
+    '/Include/cpython/tracemalloc.h',
+    '/Include/pystats.h',
+])
+PUBLIC_USED = {
+    '/Include/object.h': ['/Include/pyatomic.h'],
+    '/Include/internal/pycore_ceval.h': ['/Include/pyatomic.h'],
+    '/Include/internal/pycore_interp.h': ['/Include/pyatomic.h'],
+    '/Include/internal/pycore_lock.h': ['/Include/pyatomic.h'],
+    '/Include/internal/pycore_object.h': ['/Include/pyatomic.h'],
+    '/Include/internal/pycore_parking_lot.h': ['/Include/pyatomic.h'],
+    '/Include/internal/pycore_runtime.h': ['/Include/pyatomic.h'],
+}
 
 
 def _resolve_directories(downdir=None, srcdir=None):
@@ -108,6 +76,16 @@ def _resolve_directories(downdir=None, srcdir=None):
     return downdir, srcdir, incldir
 
 
+def _assert_valid_path(path, files):
+    assert path.startswith('/'), repr(path)
+    if __debug__:
+        if path in files:
+#            filestext = '{'+'\n'.join(f' {k}: {v}' for k, v in files.items())+'\n}'
+            import pprint
+            filestext = pprint.pformat(files, indent=2, width=200)
+    assert path not in files, f'\n{path} in\n{filestext}'
+
+
 def clear_all(downdir=None, srcdir=None):
     downdir, srcdir, incldir = _resolve_directories(downdir, srcdir)
     _utils.clear_directory(downdir)
@@ -115,45 +93,136 @@ def clear_all(downdir=None, srcdir=None):
     _utils.rm_files(os.path.join(srcdir, '*.c'))
 
 
-def download_all(repo, revision, downdir=None):
-    repo = _git.resolve_repo(repo)
+def download_source(repo, revision, downdir=None, knowndirs=None):
+    if knowndirs is None:
+        knowndirs = set()
+    repo = _cpython.resolve_repo(repo)
     downdir, *_ = _resolve_directories(downdir)
 
     files = {}
-    knownfiles = set()
     maybe_old = dict(PRE_PEP_734)
     old = []
 
     def download(path):
-        assert path.startswith('/'), repr(path)
-        assert path not in files, files
+        _assert_valid_path(path, files)
         target = f'{downdir}/...'
         altpath = maybe_old.pop(path, None)
-        assert altpath not in files, files
+        _assert_valid_path(altpath, files)
         target, _, downpath, _, _ = repo.download(path, target, revision,
                                                   altpath=altpath,
-                                                  makedirs=knownfiles)
-        files[path] = target
+                                                  makedirs=knowndirs)
+        files[path] = (target, 'copy')
         if downpath == altpath:
             old.append(path)
 
+    print('.py files:')
     for path in SRC_PY:
         download(path)
 
     print()
-    for path in INCLUDES:
-        download(path)
-
-    print()
-    for path in INCLUDES_INDIRECT:
-        download(path)
-
-    print()
+    print('.c files:')
     for path in SRC_C:
         download(path)
 
     assert not maybe_old or maybe_old == PRE_PEP_734, (maybe_old, old)
     assert not old or sorted(old) == sorted(PRE_PEP_734), (maybe_old, sorted(old), sorted(PRE_PEP_734))
+
+    return files
+
+
+def _list_public_headers(repo, revision=None):
+    includes = _cpython.list_public_headers(repo, revision)
+    other = _cpython.list_public_headers(repo, '3.12')
+    new = set(includes) - set(other)
+    return includes, new
+
+
+def _iter_includes(filename, path, new, seen=None):
+    for inclpath in _cpython.iter_includes(filename, seen):
+        if inclpath == '/Include/Python.h':
+            if seen:
+                seen.pop(inclpath)
+            continue
+        if '/' not in inclpath.lstrip('/Include/') and inclpath not in new:
+            if seen:
+                seen.pop(inclpath)
+            continue
+        yield inclpath
+    if path:
+        for pubpath in PUBLIC_USED.get(path) or ():
+            yield pubpath
+
+
+def download_includes(repo, revision, cfiles, downdir=None, knowndirs=None):
+    if knowndirs is None:
+        knowndirs = set()
+    repo = _cpython.resolve_repo(repo)
+    downdir, *_ = _resolve_directories(downdir)
+
+    print('analyzing public headers (Python.h)')
+    public, new = _list_public_headers(repo, revision)
+    if new:
+        for path in sorted(new):
+            status = ' (ignored)' if path in PUBLIC_NOT_USED else ''
+            print(f' public header not in 3.12: {path}{status}')
+        print()
+
+    files = {}
+
+    def download(path, parent=None):
+        _assert_valid_path(path, files)
+        target = f'{downdir}/...'
+        target, *_ = repo.download(path, target, revision, makedirs=knowndirs)
+
+        copy = 'copy'
+        if path in INCOMPATIBLE:
+            copy = 'dummy'
+        elif parent:
+            _, parent_copy = files[parent]
+            if parent_copy != 'copy':
+                copy = 'ignore'
+        files[path] = (target, copy)
+        return target
+
+    seen = {}
+
+    print('.h files (new):')
+    for path in sorted(new):
+        if path not in PUBLIC_NOT_USED:
+            target = download(path)
+            seen[path] = target
+
+    print()
+    print('.h files (direct):')
+    for filename in cfiles:
+        for path in _iter_includes(filename, None, new, seen):
+            assert path.startswith('/Include/internal/'), repr(path)
+            target = download(path)
+            seen[path] = target
+
+    print()
+    print('.h files (indirect):')
+    remainder = sorted(seen.items())
+    while remainder:
+        import pprint; pprint.pprint(remainder, indent=2, width=200)
+        path, filename = remainder.pop(0)
+        assert filename, repr(path)
+        for indirect in _iter_includes(filename, path, new):
+            if indirect in seen:
+                target, copy = files[indirect]
+                if indirect in INCOMPATIBLE:
+                    assert copy == 'dummy'
+                else:
+                    assert copy != 'dummy'
+#                    _, parent_copy = files[path]
+#                    if parent_copy == 'copy' and copy != 'copy':
+#                         files[indirect] = (target, 'copy')
+#                         remainder.append((indirect, target))
+            else:
+                target = download(indirect, parent=path)
+#                print(f'      {path:30} -> {indirect}')
+                seen[indirect] = target
+                remainder.append((indirect, target))
 
     return files
 
@@ -175,19 +244,20 @@ def _resolve_src_target(srcdir, incldir, path):
 
 def apply_downloads(files, srcdir=None):
     _, srcdir, incldir = _resolve_directories(srcdir=srcdir)
-
-    copied = []
-    for path, downloaded in files.items():
+    for path, (downloaded, copy) in files.items():
         target = _resolve_src_target(srcdir, incldir, path)
-        reltarget = os.path.relpath(target)
-        if path in DUMMIES:
-            print(f' ./{reltarget:40}  <- dummy')
-            _utils.touch(target)
-        else:
-            print(f' ./{reltarget:40}  <- ./{os.path.relpath(downloaded)}')
+        if copy == 'copy':
             _utils.copy_file(downloaded, target)
-            copied.append(target)
-    return copied
+        elif copy == 'dummy':
+            assert path in INCOMPATIBLE, repr(path)
+            _utils.touch(target)
+            downloaded = None
+        elif copy == 'ignore':
+            target = None
+            downloaded = None
+        else:
+            raise NotImplementedError(copy)
+        yield path, target, downloaded
 
 
 def _fix_file(filename, fix):
@@ -237,7 +307,7 @@ def write_metadata(repo, revision, files, branch=None, filename=None):
 
     filelines = ['{']
     indent = ' ' * 4
-    for relfile, target in sorted(files.items()):
+    for relfile, (target, _) in sorted(files.items()):
         reltarget = os.path.relpath(target, ROOT)
         filelines.append(f'{indent}{relfile:45} -> {reltarget}')
     filelines.append(indent + '}')
@@ -268,22 +338,50 @@ def parse_args(argv=sys.argv[1:], prog=sys.argv[0]):
 def main(revision=None, repo=None):
     if not revision:
         revision = 'main'
-    if repo is None:
-        repo = REPO_URL
-    repo = _git.resolve_repo(repo)
+    repo = _cpython.resolve_repo(repo)
 
     revision, branch = repo.resolve_revision(revision)
+
+    downdir, srcdir, incldir_ = _resolve_directories()
+    knowndirs = set()
 
     print('####################')
     print('downloading...')
     clear_all()
-    files = download_all(repo, revision)
+    files = download_source(repo, revision, downdir, knowndirs)
+    cfiles = [f for f, _ in files.values() if f.endswith('.c')]
+    print()
+    inclfiles = download_includes(repo, revision, cfiles,
+                                  downdir, knowndirs)
+    files.update(inclfiles)
+#    files = download_all(repo, revision)
+    print('...done')
+
+    print()
+    print('####################')
+    print('copying files...')
+    copied = []
+    ignored = []
+    for path, target, downloaded in apply_downloads(files):
+        if target is None:
+            ignored.append(path)
+            continue
+        reltarget = os.path.relpath(target)
+        if downloaded:
+            print(f' ./{reltarget:40}  <- ./{os.path.relpath(downloaded)}')
+            copied.append(target)
+        else:
+            print(f' ./{reltarget:40}  <- dummy')
+    if ignored:
+        print()
+        print('ignored:')
+        for path in ignored:
+            print(f'  {path}')
     print('...done')
 
     print()
     print('####################')
     print('applying fixes...')
-    copied = apply_downloads(files)
     fix_all(copied)
     print('...done')
 
