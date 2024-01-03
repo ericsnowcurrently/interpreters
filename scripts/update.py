@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 import datetime
+import logging
 import os
 import os.path
 import sys
@@ -10,7 +11,27 @@ import _utils
 import _cpython
 
 
-ROOT = os.path.abspath(os.path.dirname(__file__))
+VERBOSITY = 4  # logging.DEBUG
+
+logger = logging.getLogger()
+debug = (lambda msg='': print(msg))
+log = (lambda msg='': print(msg))
+warn = (lambda msg: print(msg, file=sys.stderr))
+err = (lambda msg: print(msg, file=sys.stderr))
+
+
+def init_logger(logger, verbosity=VERBOSITY):
+    _utils.init_logger(logger, verbosity)
+    global debug, log, warn, err
+    debug = (lambda msg='': logger.debug(msg))
+    log = (lambda msg='': logger.info(msg))
+    warn = (lambda msg='': logger.warning(msg))
+    err = (lambda msg='': logger.error(msg))
+
+
+ROOT = os.path.abspath(
+        os.path.dirname(
+            os.path.dirname(__file__)))
 SRC_DIR = os.path.join(ROOT, 'src')
 DOWNLOADS_DIR = os.path.join(ROOT, 'src/orig')
 METADATA_FILE = os.path.join(ROOT, 'METADATA')
@@ -88,9 +109,20 @@ def _assert_valid_path(path, files):
 
 def clear_all(downdir=None, srcdir=None):
     downdir, srcdir, incldir = _resolve_directories(downdir, srcdir)
+    return _clear_all(downdir, srcdir, incldir)
+
+
+def _clear_all(downdir, srcdir, incldir):
+    srcglob = os.path.join(srcdir, '*.c')
+
+    debug(f'clearing ./{os.path.relpath(downdir)}/*')
     _utils.clear_directory(downdir)
+
+    debug(f'clearing ./{os.path.relpath(incldir)}/*')
     _utils.clear_directory(incldir)
-    _utils.rm_files(os.path.join(srcdir, '*.c'))
+
+    debug(f'clearing ./{os.path.relpath(srcglob)}')
+    _utils.rm_files(srcglob)
 
 
 def download_source(repo, revision, downdir=None, knowndirs=None):
@@ -98,7 +130,10 @@ def download_source(repo, revision, downdir=None, knowndirs=None):
         knowndirs = set()
     repo = _cpython.resolve_repo(repo)
     downdir, *_ = _resolve_directories(downdir)
+    return _download_source(repo, revision, downdir, knowndirs)
 
+
+def _download_source(repo, revision, downdir, knowndirs):
     files = {}
     maybe_old = dict(PRE_PEP_734)
     old = []
@@ -115,12 +150,12 @@ def download_source(repo, revision, downdir=None, knowndirs=None):
         if downpath == altpath:
             old.append(path)
 
-    print('.py files:')
+    debug('.py files:')
     for path in SRC_PY:
         download(path)
 
-    print()
-    print('.c files:')
+    debug('')
+    debug('.c files:')
     for path in SRC_C:
         download(path)
 
@@ -158,14 +193,17 @@ def download_includes(repo, revision, cfiles, downdir=None, knowndirs=None):
         knowndirs = set()
     repo = _cpython.resolve_repo(repo)
     downdir, *_ = _resolve_directories(downdir)
+    return _download_includes(repo, revision, cfiles, downdir, knowdirs)
 
-    print('analyzing public headers (Python.h)')
+
+def _download_includes(repo, revision, cfiles, downdir, knowndirs):
+    debug('analyzing public headers (Python.h)')
     public, new = _list_public_headers(repo, revision)
     if new:
         for path in sorted(new):
             status = ' (ignored)' if path in PUBLIC_NOT_USED else ''
-            print(f' public header not in 3.12: {path}{status}')
-        print()
+            warn(f' public header not in 3.12: {path}{status}')
+        debug('')
 
     files = {}
 
@@ -186,25 +224,25 @@ def download_includes(repo, revision, cfiles, downdir=None, knowndirs=None):
 
     seen = {}
 
-    print('.h files (new):')
+    debug('.h files (new):')
     for path in sorted(new):
         if path not in PUBLIC_NOT_USED:
             target = download(path)
             seen[path] = target
 
-    print()
-    print('.h files (direct):')
+    debug('')
+    debug('.h files (direct):')
     for filename in cfiles:
         for path in _iter_includes(filename, None, new, seen):
             assert path.startswith('/Include/internal/'), repr(path)
             target = download(path)
             seen[path] = target
 
-    print()
-    print('.h files (indirect):')
+    debug('')
+    debug('.h files (indirect):')
     remainder = sorted(seen.items())
     while remainder:
-        import pprint; pprint.pprint(remainder, indent=2, width=200)
+#        import pprint; pprint.pprint(remainder, indent=2, width=200)
         path, filename = remainder.pop(0)
         assert filename, repr(path)
         for indirect in _iter_includes(filename, path, new):
@@ -244,6 +282,10 @@ def _resolve_src_target(srcdir, incldir, path):
 
 def apply_downloads(files, srcdir=None):
     _, srcdir, incldir = _resolve_directories(srcdir=srcdir)
+    return _apply_downloads(files, srcdir, incldir)
+
+
+def _apply_downloads(files, srcdir, incldir):
     for path, (downloaded, copy) in files.items():
         target = _resolve_src_target(srcdir, incldir, path)
         if copy == 'copy':
@@ -284,7 +326,7 @@ def fix_all(files):
             fix = fix_crossinterp_h
         else:
             continue
-        print(f'+ fixing ./{os.path.relpath(filename)}')
+        debug(f'+ fixing ./{os.path.relpath(filename)}')
         _fix_file(filename, fix)
 
 
@@ -342,56 +384,71 @@ def main(revision=None, repo=None):
 
     revision, branch = repo.resolve_revision(revision)
 
-    downdir, srcdir, incldir_ = _resolve_directories()
+    downdir, srcdir, incldir = _resolve_directories()
     knowndirs = set()
+    files = {}
 
-    print('####################')
-    print('downloading...')
-    clear_all()
-    files = download_source(repo, revision, downdir, knowndirs)
+    def section(title):
+        assert title
+        debug()
+        debug('####################')
+        log(title)
+        debug('####################')
+        debug()
+
+    ###############
+    section('removing old files')
+
+    _clear_all(downdir, srcdir, incldir)
+
+    ###############
+    section('downloading')
+
+    files = _download_source(repo, revision, downdir, knowndirs)
     cfiles = [f for f, _ in files.values() if f.endswith('.c')]
-    print()
-    inclfiles = download_includes(repo, revision, cfiles,
-                                  downdir, knowndirs)
+    debug()
+    inclfiles = _download_includes(repo, revision, cfiles, downdir, knowndirs)
     files.update(inclfiles)
-#    files = download_all(repo, revision)
-    print('...done')
 
-    print()
-    print('####################')
-    print('copying files...')
+    ###############
+    section('copying downloaded files')
+
     copied = []
     ignored = []
-    for path, target, downloaded in apply_downloads(files):
+    for path, target, downloaded in _apply_downloads(files, srcdir, incldir):
         if target is None:
             ignored.append(path)
             continue
         reltarget = os.path.relpath(target)
         if downloaded:
-            print(f' ./{reltarget:40}  <- ./{os.path.relpath(downloaded)}')
+            debug(f' ./{reltarget:40}  <- ./{os.path.relpath(downloaded)}')
             copied.append(target)
         else:
-            print(f' ./{reltarget:40}  <- dummy')
+            debug(f' ./{reltarget:40}  <- dummy')
     if ignored:
-        print()
-        print('ignored:')
+        debug()
+        debug('ignored:')
         for path in ignored:
-            print(f'  {path}')
-    print('...done')
+            debug(f'  {path}')
 
-    print()
-    print('####################')
-    print('applying fixes...')
+    ###############
+    section('applying fixes')
+
     fix_all(copied)
-    print('...done')
+    debug('...done')
 
-    print()
-    print('####################')
-    print('writing metadata...')
+    ###############
+    section('writing metadata')
+
     write_metadata(repo, revision, files, branch)
-    print('...done')
+    debug('...done')
+
+    ###############
+    debug()
 
 
 if __name__ == '__main__':
+    verbosity = VERBOSITY
     revision = parse_args()
+    init_logger(logger, verbosity)
     main(revision)
