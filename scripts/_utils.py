@@ -1,13 +1,51 @@
 import glob
 import json
+import logging
 import os
 import os.path
 import shutil
 import subprocess
+import sys
 from urllib.parse import urlparse
 from urllib.request import urlretrieve, urlopen
 from urllib.error import HTTPError
 
+
+logger = logging.getLogger('_utils')
+
+
+#######################################
+# logging
+
+VERBOSITY = 3  # logging.INFO
+MAX_LEVEL = logging.CRITICAL  # 50
+LEVEL_PER_VERBOSITY = 10
+
+
+def init_logger(logger, verbosity=VERBOSITY, *, propagate=True):
+    level = min(MAX_LEVEL,
+                max(1,  # 0 would disable logging.
+                    (MAX_LEVEL) - verbosity * LEVEL_PER_VERBOSITY))
+
+    # init the formatter
+    formatter = logging.Formatter()
+
+    # init the handler
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(level)
+    handler.setFormatter(formatter)
+
+    # XXX Use a different handler (with sys.stderr) for WARN/ERROR/CRITICAL?
+
+    # init the logger
+    logger.addHandler(handler)
+    if not logger.isEnabledFor(level):
+        logger.setLevel(level)
+    logger.propagate = propagate
+
+
+#######################################
+# run commands
 
 def run(cmd, *argv, capture=False, **kwargs):
     argv = [cmd, *argv]
@@ -22,6 +60,9 @@ def run(cmd, *argv, capture=False, **kwargs):
     )
     return proc.returncode, proc.stdout, proc.stderr
 
+
+#######################################
+# filesystem
 
 def _maybe_make_parent_dir(filename, makedirs=True, *, _knowndirs=set()):
     if makedirs is True:
@@ -73,6 +114,9 @@ def touch(filename, *, makedirs=True):
     with open(filename, 'w'):
         pass
 
+
+#######################################
+# network
 
 def parse_url(url):
     filename = None
@@ -149,7 +193,8 @@ def download(url, target=None, *,
         relalttarget = os.path.relpath(alttarget)
         minwidth = max(minwidth, len(relalttarget))
 
-    print(f' + ./{reltarget:{minwidth}}  <- {url}')
+    log = logger.debug
+    log(f' + ./{reltarget:{minwidth}}  <- {url}')
 
     _maybe_make_parent_dir(target, makedirs)
     if dummy:
@@ -165,12 +210,12 @@ def download(url, target=None, *,
             if alttarget:
                 target = alttarget
                 _maybe_make_parent_dir(target, makedirs)
-            print('-- remote file not found, falling back to alt URL --')
+            log('-- remote file not found, falling back to alt URL --')
             if alttarget:
                 target = alttarget
-                print(f' - ./{relalttarget:{minwidth}}  <- {url}')
+                log(f' - ./{relalttarget:{minwidth}}  <- {url}')
             else:
-                print(f'     {" "*minwidth}  <- {alturl}')
+                log(f'     {" "*minwidth}  <- {alturl}')
             url = alturl
             urlretrieve(url, target)
 
