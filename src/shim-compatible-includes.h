@@ -24,6 +24,7 @@ extern int _PyInterpreterState_SetNotRunningMain(PyInterpreterState *);
 extern void _PyInterpreterState_FailIfRunningMain(PyInterpreterState *);
 #define PyUnstable_InterpreterState_GetMainModule(INTERP) \
     _PyInterpreterState_GetMainModule(INTERP)
+#define _PyThreadState_GET PyThreadState_GET
 
 // pycore_interp.h
 extern int _PyInterpreterState_IDInitref(PyInterpreterState *);

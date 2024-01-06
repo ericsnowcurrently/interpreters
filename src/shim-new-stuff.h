@@ -48,17 +48,11 @@ extern int _PyEval_AddPendingCall(
 #define PyUnstable_AtExit _Py_AtExit
 
 // pycore_pythread.h
-/*
-XXX
-PyThread_acquire_lock_timed_with_retries()
-PyThread_ParseTimeoutArg()
-*/
+#define PyThread_UNSET_TIMEOUT ((_PyTime_t)(-1 * 1000 * 1000 * 1000))
+extern int PyThread_ParseTimeoutArg(
+        PyObject *arg, int blocking, PY_TIMEOUT_T *timeout_p);
+extern PyLockStatus PyThread_acquire_lock_timed_with_retries(
+        PyThread_type_lock, PY_TIMEOUT_T);
 
 // pycore_pybuffer.h
-// XXX
 extern int _PyBuffer_ReleaseInInterpreterAndRawFree(PyInterpreterState *, Py_buffer *);
-//static inline int
-//_PyBuffer_ReleaseInInterpreterAndRawFree(PyInterpreterState *interp, Py_buffer *buf)
-//{
-//    return _Py_CallInInterpreterAndRawFree(interp, _buffer_release_call, view);
-//}
