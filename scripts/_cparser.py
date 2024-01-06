@@ -4,6 +4,18 @@ import re
 import types
 
 
+def _looks_like_file(text):
+    raise NotImplementedError
+
+
+def clean_lines(lines):
+    """Remove comments and trailing whitespace."""
+    for line in replace_comments(lines):
+        yield line.rstrip()
+
+
+#######################################
+# C source lines
 
 # This cannot inherit from StopIteration due to PEP 479.
 class EndOfFile(EOFError):
@@ -15,6 +27,107 @@ def next_line(lines):
         return next(lines)
     except StopIteration:
         raise EndOfFile
+
+
+class Location(namedtuple('Location', 'file lno chno')):
+
+    @classmethod
+    def from_raw(cls, raw):
+        if isinstance(raw, cls):
+            return raw
+        elif not raw:
+            raise ValueError('missing location')
+        elif isinstance(raw, str):
+            return cls.parse(raw)
+        elif hasattr(raw, 'items'):
+            raise TypeError(f'got unexpected mapping {raw!r}')
+        else:
+            try:
+                return cls.from_values(*raw)
+            except ValueError:
+                raise ValueError(f'unsupported value {raw!r}')
+
+    @classmethod
+    def parse(cls, locstr):
+        '''
+        filename
+        filename:lno
+        filename:lno:chno
+        filename:lno:chno:text
+        filename:lno:text
+        filename:text
+        '''
+        filename, _, text = locstr.partition(':')
+        parts = []
+        if text:
+            part, _, remainder = text.partition(':')
+            if part.isdigit():
+                # lno
+                parts.append(int(part))
+                text = remainder
+                if text:
+                    part, _, remainder = text.partition(':')
+                    if part.isdigit():
+                        # chno
+                        parts.append(int(part))
+                        text = remainder
+        if text.strip():
+            parts.append(text)
+        return cls.from_values(filename, *parts)
+
+    @classmethod
+    def from_values(cls, filename, lno=None, chno=None, text=None):
+        if lno is not None:
+            if isinstance(lno, str):
+                if lno.isdigit():
+                    lno = int(lno)
+                elif chno is None and text is None:
+                    text = lno
+                    lno = None
+        if chno is not None:
+            if isinstance(chno, str):
+                if chno.isdigit():
+                    chno = int(chno)
+                elif text is None:
+                    text = chno
+                    chno = None
+        return cls(filename, lno, chno, text)
+
+    def __new__(cls, file, lno=None, chno=None, text=None):
+        if not lno and not isinstance(lno, int):
+            lno = None
+        if not chno and not isinstance(chno, int):
+            chno = None
+        self = super().__new__(cls, file or None, lno, chno)
+        self._text = text if text and text.strip() else None
+        return self
+
+    def __init__(self, *args, **kwargs):
+        if not self.file:
+            raise ValueError('missing file')
+        # XXX Validate self.file?
+
+        if self.lno is not None:
+            if not isinstance(self.lno, int):
+                raise TypeError(f'expected int lno, got {self.lno!r}')
+            if self.lno < 1:
+                raise ValueError(f'expected positive lno, got {self.lno!r}')
+
+        if self.chno is not None:
+            if self.lno is None:
+                raise ValueError('missing lno')
+            if not isinstance(self.chno, int):
+                raise TypeError(f'expected int chno, got {self.chno!r}')
+            if self.chno < 1:
+                raise ValueError(f'expected positive chno, got {self.chno!r}')
+
+        if self.text is not None:
+            if not isinstance(self.text, str):
+                raise TypeError(f'text must be str, got {self.text!r}')
+
+    @property
+    def text(self):
+        return self._text
 
 
 class LinesInfo(namedtuple('LinesInfo', 'end endoffset lastoffset cont_end')):
@@ -167,6 +280,9 @@ class LinesInfo(namedtuple('LinesInfo', 'end endoffset lastoffset cont_end')):
 #    else:
 #        raise NotImplementedError('not reachable')
 
+
+#######################################
+# C comments
 
 '''
 // ...
@@ -379,11 +495,8 @@ def replace_comments(lines, *, clear_continuation=True):
         return
 
 
-def clean_lines(lines):
-    """Remove comments and trailing whitespace."""
-    for line in replace_comments(lines):
-        yield line.rstrip()
-
+#######################################
+# C preprocessor
 
 class PreprocessorDirective(namedtuple('PreprocessorDirective',
                                        'kind name args value')):
@@ -391,7 +504,9 @@ class PreprocessorDirective(namedtuple('PreprocessorDirective',
     KINDS = {
         'include',
         'ifdef',
+        'ifndef',
         'if',
+        'elif',
         'else',
         'endif',
         'define',
@@ -497,7 +612,7 @@ class PreprocessorDirective(namedtuple('PreprocessorDirective',
              )
             |
             (?:
-                ( if )  # <if>
+                ( (?: el )? if )  # <if>
                 \s+
                 (
                         (?: \S+ \s+ )* \S* [^\s\\]
@@ -507,6 +622,11 @@ class PreprocessorDirective(namedtuple('PreprocessorDirective',
                     ( \\ )  # <if_continuation>
                     (?: \r? \n )?
                  )?
+             )
+            |
+            (?:
+                ( else )  # <else>
+                \s*
              )
             |
             (?:
@@ -569,6 +689,7 @@ class PreprocessorDirective(namedtuple('PreprocessorDirective',
          include, incl_system, incl_user, incl_other,
          ifdef, ifdef_name,
          ifdirective, if_cond, if_continuation,
+         elsedirective,
          endifdirective,
          error, error_msg,
          other,
@@ -579,7 +700,7 @@ class PreprocessorDirective(namedtuple('PreprocessorDirective',
             if def_args:
                 args = tuple(def_args.replace(',', ' ').split())
             else:
-                assert not def_continuation, repr(line)
+#                assert not def_continuation, repr(line)
                 args = None
             value = def_body if def_body else None
             if def_continuation:
@@ -602,17 +723,23 @@ class PreprocessorDirective(namedtuple('PreprocessorDirective',
             else:
                 raise NotImplementedError(m.groups())
         elif ifdef:
-            kind = 'ifdef'
+            kind = ifdef
             name = None
             args = None
             value = ifdef_name
         elif ifdirective:
-            kind = 'if'
+            kind = ifdirective
             name = None
             args = None
             value = if_cond
             if if_continuation:
-                raise NotImplementedError(repr(line))
+#                raise NotImplementedError(repr(line))
+                continuation = True
+        elif elsedirective:
+            kind = 'else'
+            name = None
+            args = None
+            value = None
         elif endifdirective:
             kind = 'endif'
             name = None
@@ -819,6 +946,7 @@ class PreprocessorDirective(namedtuple('PreprocessorDirective',
                     lines = [f'#define {self.name} {self.value}']
                     if self._lines and len(self._lines) > 1:
                         lines += [''] * (len(self._lines) - 1)
+                    # XXX continuations?
                     return lines
                 else:
                     return [f'#define {self.name}']
@@ -850,10 +978,18 @@ class PreprocessorDirective(namedtuple('PreprocessorDirective',
             assert self.name is None, repr(self)
             assert self.args is None, repr(self)
             return [f'#ifdef {self.value}']
+        elif self.kind == 'ifndef':
+            assert self.name is None, repr(self)
+            assert self.args is None, repr(self)
+            return [f'#ifndef {self.value}']
         elif self.kind == 'if':
             assert self.name is None, repr(self)
             assert self.args is None, repr(self)
             return [f'#if {self.value}']
+        elif self.kind == 'elif':
+            assert self.name is None, repr(self)
+            assert self.args is None, repr(self)
+            return [f'#elif {self.value}']
         elif self.kind == 'else':
             assert self.name is None, repr(self)
             assert self.args is None, repr(self)
@@ -868,6 +1004,9 @@ class PreprocessorDirective(namedtuple('PreprocessorDirective',
         else:
             raise NotImplementedError(repr(self))
 
+
+#######################################
+# C strings
 
 def replace_strings(lines, *, clean=True, keepincludes=True):
     """Replace string literatls with empty strings.
@@ -951,6 +1090,256 @@ def _replace_strings_partition(lines, keepincludes):
                 yield line
                 break
             yield f'{" "*len(line)}'
+
+
+#######################################
+# declarations and function definitions
+
+def iter_compiler_refs(lines, filename, load_include=None):
+    seen = set()
+    yield from _iter_compiler_refs(lines, filename, seen, load_include)
+
+
+def _iter_compiler_refs(lines, filename, seen_includes, load_include=None):
+    for line in lines:
+        ref = ...
+        yield ref
+
+        if ref.kind == 'include-user':
+            if load_include is not None and ref.name not in seen_includes:
+                seen_includes.add(ref.name)
+                inner_lines, inner_filename = load_include(ref.name)
+                with inner_lines:
+                    yield from _iter_compiler_refs(inner_lines, inner_filename,
+                                                   seen_includes, load_include)
+        elif ref.kind == 'include-system':
+            if ref.name not in seen_includes:
+                seen_includes.add(ref.name)
+                yield from _expand_system_include(ref.name)
+        elif ref.topkind == 'include':
+            raise NotImplementedError(ref)
+
+
+def _expand_system_include(include):
+    # XXX ...
+    return
+    yield None
+
+        
+
+class CCompilerRefs:
+
+    def __init__(self):
+        # name -> (loc, context, inline, deps)
+        self.macros = {}
+        self.constants = {}
+        self.structs = {}
+        self.enums = {}
+        self.enum_values = {}
+        self.unions = {}
+        self.functions = {}
+        self.variables = {}
+
+    # XXX Resolve individual struct/union fields?
+
+        
+class CCompilerRef(namedtuple('CCompilerRef', 'kind name loc text')):
+
+    KINDS = {
+#        # CInclude
+#        'include-system',
+#        'include-user',
+        # CDefine
+        'define-macro',
+        'define-constant',
+        # CDeclaration
+        'typedef',
+        'struct',
+        'enum',
+        'union',
+        'symbol-function',
+        'symbol-variable',
+    }
+    KIND_ALIASES = {
+        # CDefine
+        'macro': 'define-macro',
+        'constant': 'define-constant',
+        # CDeclaration
+        'function': 'symbol-function',
+        'variable': 'symbol-variable',
+    }
+
+    @classmethod
+    def from_values(cls, kind, name, loc=None, text=None):
+        kind = cls.normalize_kind(kind)
+        cls._validate_name(name)
+        if text and text.strip():
+            cls._validate_text(text)
+        else:
+            text = None
+        if loc:
+            loc, text = cls.normalize_loc(loc, text)
+        else:
+            loc = None
+        self = cls.__new__(cls, kind, name, loc, text)
+        return self
+
+    @classmethod
+    def normalize_kind(cls, kind):
+        if not kind:
+            raise ValueError('missing kind')
+        for k in cls.KINDS:
+            if kind == k:
+                return k
+        else:
+            try:
+                return cls.KIND_ALIASES[kind]
+            except KeyError:
+                raise ValueError(f'unsupported kind {kind!r}')
+
+    @classmethod
+    def normalize_loc(cls, loc, text=None):
+        if not loc:
+            raise ValueError('missing loc')
+        elif not isinstance(loc, Location):
+            loc = Location.from_raw(loc)
+
+        if text is None:
+            text = loc.text
+        elif loc.text is not None:
+            # XXX Check for a mismatch.
+            pass
+        # XXX Make sure loc.lno and loc.chno are correct?
+
+        return loc, text
+
+    @classmethod
+    def _validate_kind(cls, kind):
+        if not kind:
+            raise ValueError('missing kind')
+        elif not any(kind is k for k in cls.KINDS):
+            raise ValueError(f'unsupported kind {kind!r}')
+
+    @classmethod
+    def _validate_name(cls, name):
+        if not name:
+            raise ValueError('missing name')
+        # XXX Validate name.
+
+    @classmethod
+    def _validate_loc(cls, loc):
+        if not loc:
+            raise ValueError('missing loc')
+        elif not isinstance(loc, Location):
+            raise TypeError(f'unsupported loc {loc!r}')
+
+    @classmethod
+    def _validate_text(cls, text):
+        if not text:
+            raise ValueError('missing text')
+        elif isinstance(text, str):
+            if not text.strip():
+                raise ValueError('missing text')
+
+    def __new__(cls, kind, name, loc=None, text=None):
+        if cls is CCompilerRef:
+            for subclass in (
+#                CInclude,
+                CDefine,
+                CDeclaration,
+            ):
+                if kind in subclass.KINDS:
+                    return subclass.__new__(cls, kind, name, loc, text)
+        self = super().__new__(
+            cls,
+            kind=kind or None,
+            name=name or None,
+            loc=loc or None,
+            text=text or None,
+        )
+        return self
+
+    def __init__(self, *args, **kwargs):
+        cls = type(self)
+        cls._validate_kind(self.kind)
+        cls._validate_name(self.name)
+        if self.loc is not None:
+            cls._validate_loc(self.loc)
+        if self.text is not None:
+            cls._validate_text(self.text)
+
+    @property
+    def deps(self):
+        try:
+            return list(self._deps)
+        except AttributeError:
+            raise NotImplementedError
+            self._deps = ...
+            return list(self._deps)
+
+    @property
+    def topkind(self):
+        top, _, _ = self.kind.partition('-')
+        return top
+
+    @property
+    def subkind(self):
+        _, _, sub = self.kind.partition('-')
+        return sub or None
+
+    def match_kind(self, kind):
+        if self.kind == kind:
+            return True
+        elif self.topkind == kind:
+            return True
+        elif self.kind == self.KIND_ALIASES.get(kind):
+            return True
+        else:
+            return False
+
+
+#class CInclude(CCompilerRef):
+#
+#    KINDS = {
+#        'include-system',
+#        'include-user',
+#    }
+#    KIND_ALIASES = {}
+
+
+class CDefine(CCompilerRef):
+
+    KINDS = {
+        'define-macro',
+        'define-constant',
+    }
+    KIND_ALIASES = {
+        'macro': 'define-macro',
+        'constant': 'define-constant',
+    }
+
+
+class CDeclaration(CCompilerRef):
+
+    KINDS = {
+        'typedef',
+        'struct',
+        'enum',
+        'union',
+        'symbol-function',
+        'symbol-variable',
+    }
+    KIND_ALIASES = {
+        'function': 'symbol-function',
+        'variable': 'symbol-variable',
+    }
+
+
+def iter_definitions(lines, filename=None):
+    raise NotImplementedError
+    for lno, line in enumerate(lines, 1):
+        ...
+        yield name, kind, Location(filename, lno, text=text)
 
 
 USED_RE = re.compile(r'''
@@ -1086,24 +1475,31 @@ def iter_used(lines, filename=None):
          ) = m.groups()
         if include:
             if incl_system:
-                continue
+                kind = 'include-system'
+                name = incl_system
             elif incl_user:
-                include = incl_user
+                kind = 'include-user'
+                name = incl_user
             else:
                 raise NotImplementedError(f'{filename}{lno}: {incl_other!r} ({line.rstrip()})')
             if not include.endswith('.h'):
                 raise NotImplementedError(f'{filename}{lno}: {include!r} ({line.rstrip()})')
-            yield (include, 'include')
+            yield CDependency.from_values(kind, name, parent)
         elif typedef:
             if tp_inline_kind:
                 if tp_inline_name:
-                    yield (tp_inline_name, f'{tp_inline_kind}-decl')
+                    kind = tp_inline_kind
+                    name = tp_inline_name
+                    yield CDependency.from_values(kind, name, parent)
+#                    yield (tp_inline_name, f'{tp_inline_kind}-decl')
                 else:
+                    raise NotImplementedError
                     yield (None, 'typedef')
                 if tp_inline_body:
                     # XXX Analyze it.
                     ...
                 if tp_inline_close:
+                    raise NotImplementedError
                     yield (tp_inline_close, 'typedef')
             elif tp_name:
                 ...
@@ -1114,6 +1510,231 @@ def iter_used(lines, filename=None):
         else:
             raise NotImplementedError(m.groups())
 
+
+#######################################
+# C dependencies
+
+def analyze_dependencies(lines, filename=None, implied=None, *,
+                         download_include=None,
+                         recurse=False,
+                         ):
+    if download_include is not None:
+        if not callable(download_include):
+            raise TypeError(f'download include must be callable, got {download_include!r}')
+    elif recurse:
+        raise ValueError('cannot recurse without download_include()')
+
+    if implied:
+        for dep in implied:
+            yield dep
+            if dep.kind == 'include-user' and download_include is not None:
+                depfile = download_include(dep.name)
+                if recurse:
+                    with open(depfile) as infile:
+                        yield from analyze_dependencies(
+                            infile, depfile,
+                            download_include=download_include,
+                            recurse=recurse,
+                        )
+
+    raise NotImplementedError
+    for line in lines:
+        ...
+
+
+class CDependency(namedtuple('CDependency', 'ref context')):
+
+    @classmethod
+    def from_location(cls, kind, name, loc, defined=None):
+        kind = cls.normalize_kind(kind)
+        cls._validate_name(name)
+        parent = Location.from_raw(loc)
+        if defined.strip():
+            defined = cls.normalize_defined(defined, parent)
+        else:
+            defined = None
+        self = cls.__new__(cls, kind, name, parent, defined)
+        return self
+
+    @classmethod
+    def from_values(cls, kind, name, parent=None, defined=None):
+        kind = cls.normalize_kind(kind)
+        cls._validate_name(name)
+        if parent.strip():
+            parent = cls.normalize_parent(parent)
+        else:
+            parent = None
+        if defined.strip():
+            defined = cls.normalize_defined(defined, parent)
+        else:
+            defined = None
+        self = cls.__new__(cls, kind, name, parent, defined)
+        return self
+
+    @classmethod
+    def normalize_kind(cls, kind):
+        if not kind:
+            raise ValueError('missing kind')
+        for k in cls.KINDS:
+            if kind == k:
+                return k
+        else:
+            try:
+                return cls.KIND_ALIASES[kind]
+            except KeyError:
+                raise ValueError(f'unsupported kind {kind!r}')
+
+    @classmethod
+    def normalize_parent(cls, parent):
+        if not parent:
+            raise ValueError('missing parent')
+        elif isinstance(parent, CDependency):
+            return parent
+        else:
+            return Location.from_raw(parent)
+
+    @classmethod
+    def normalize_defined(cls, defined, parent=None):
+        if not defined:
+            raise ValueError('missing defined')
+        elif isinstance(defined, Location):
+            return defined
+        elif isinstance(defined, str):
+            filename, _, _ = defined.partition(':')
+            if _looks_like_file(filename):
+                return Location.from_raw(defined)
+            while parent is not None:
+                if isinstance(parent, Location):
+                    return Location(parent.file, text=defined)
+                assert isinstance(parent, CDependency), repr(parent)
+                parent = parent.parent
+            else:
+                return defined
+                #return Location('???', text=defined)
+        else:
+            raise TypeError(f'unsupported defined {defined!r}')
+
+    @classmethod
+    def _validate_kind(cls, kind):
+        if not kind:
+            raise ValueError('missing kind')
+        elif not any(kind is k for k in cls.KINDS):
+            raise ValueError(f'unsupported kind {kind!r}')
+
+    @classmethod
+    def _validate_name(cls, name):
+        if not name:
+            raise ValueError('missing name')
+        # XXX Validate name.
+
+    @classmethod
+    def _validate_parent(cls, parent):
+        if not parent:
+            raise ValueError('missing parent')
+        elif not isinstance(parent, (cls, Location)):
+            raise TypeError(f'unsupported parent {parent!r}')
+
+    @classmethod
+    def _validate_defined(cls, defined):
+        if not defined:
+            raise ValueError('missing defined')
+        elif isinstance(defined, str):
+            if not defined.strip():
+                raise ValueError('missing defined')
+        elif not isinstance(defined, Location):
+            raise TypeError(f'unsupported defined {defined!r}')
+
+    def __new__(cls, kind, name, parent=None, defined=None):
+        if cls is CDependency:
+            for subclass in (
+                CDependencyInclude,
+                CDependencyDefine,
+                CDependencyDeclaration,
+            ):
+                if kind in subclass.KINDS:
+                    return subclass.__new__(cls, kind, name, parent, defined)
+        self = super().__new__(
+            cls,
+            kind=kind or None,
+            name=name or None,
+            parent=parent or None,
+            defined=defined or None,
+        )
+        return self
+
+    def __init__(self, *args, **kwargs):
+        cls = type(self)
+        cls._validate_kind(self.kind)
+        cls._validate_name(self.name)
+        if self.parent is not None:
+            cls._validate_parent(self.parent)
+        if self.defined is not None:
+            cls._validate_defined(self.defined)
+
+    @property
+    def kind(self):
+        return self.ref.kind
+
+    @property
+    def name(self):
+        return self.ref.name
+
+    @property
+    def topkind(self):
+        return self.ref.topkind
+
+    @property
+    def subkind(self):
+        return self.ref.subkind
+
+    def match_kind(self, kind):
+        return self.ref.match_kind(kind)
+
+
+class CDependencyInclude(CDependency):
+
+    KINDS = {
+        'include-system',
+        'include-user',
+    }
+    KIND_ALIASES = {}
+
+    def download(self, download_include):
+        if self.kind != 'include-user':
+            raise NotImplementedError(repr(self.kind))
+        return download_include('Python.h')
+
+
+class CDependencyDefine(CDependency):
+
+    KINDS = {
+        'define-macro',
+        'define-constant',
+    }
+    KIND_ALIASES = {
+        'macro': 'define-macro',
+        'constant': 'define-constant',
+    }
+
+
+class CDependencyDeclaration(CDependency):
+
+    KINDS = {
+        'typedef',
+        'struct',
+        'enum',
+        'union',
+        'symbol-function',
+        'symbol-variable',
+    }
+    KIND_ALIASES = {
+        'function': 'symbol-function',
+        'variable': 'symbol-variable',
+    }
+
+
+#######################################
+# as a script
 
 if __name__ == '__main__':
     import sys

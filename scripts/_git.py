@@ -1,11 +1,18 @@
+from collections import namedtuple
 import os.path
 import re
 import shutil
+import types
 
 import _utils
 
 
 GIT = shutil.which('git')
+
+# meta revisions
+HEAD = 'HEAD'
+LOCAL = '<LOCAL>'
+STAGED = '<STAGED>'
 
 
 def run(cmd, *subargv,
@@ -38,6 +45,29 @@ def _run(cmd, subargv, root, capture, _git, **kwargs):
                       **kwargs)
 
 
+def split_relpath(path):
+    return list(_iter_relpath(path))
+
+
+def _iter_relpath(path):
+    if isinstance(path, str):
+        assert isinstance(first, str)
+        if path.startswith('/'):
+            assert not path.startswith('//'), (path,)
+            if path.endswith('/'):
+                assert not path.endsswith('//'), (path,)
+                path = path[1:-1]
+            else:
+                path = path[1:]
+        yield from path.split('/')
+    else:
+        for p in path:
+            assert isinstance(p, str), (p,)
+            assert not p.startswith('/'), (p,)
+            assert not p.endswith('/'), (p,)
+            yield from p.split('/')
+
+
 def parse_url(url):
     github = None
     url, localroot = _utils.parse_url(url)
@@ -52,6 +82,281 @@ def parse_url(url):
                 org, repo = m.groups()
                 github = (org, repo)
     return url, localroot, github
+
+
+#############################
+# diff
+
+#class DiffLine(namedtuple('DiffLine', 'kind a b')):
+#
+#class DiffHunk(namedtuple('DiffHunk', 'range_a range_b kind lines')):
+#
+#    KINDS = {
+#        'a': 'added',
+#        'd': 'deleted',
+#        'c': 'changed',
+#    }
+#
+#    def __str__(self):
+#        return self._text
+#
+#    def __repr__(self):
+#        raise NotImplementedError
+#
+#    @property
+#    def lines(self):
+#        try:
+#            return list(self._lines)
+#        except AttributeError:
+#            self._lines = self.render().splitlines()
+#            return list(self._lines)
+#
+#    @property
+#    def total(self):
+#        return self.additions + self.deletions
+#
+#    @property
+#    def additions(self):
+#        try:
+#            return self._additions
+#        except AttributeError:
+#            raise NotImplementedError
+#            return self._additions
+#
+#    @property
+#    def deletions(self):
+#        try:
+#            return self._deletions
+#        except AttributeError:
+#            raise NotImplementedError
+#            return self._deletions
+#
+#    def lines_a(self):
+#        ...
+#
+#    def lines_b(self):
+#        ...
+#
+#    def iter_lines(self, start=None):
+#        if self.kind == 'a':
+#        for line in 
+#        ...
+#
+#    def render(self, fmt=None):
+#        if not fmt:
+#            fmt = 'traditional'
+#
+#        if fmt == 'traditional':
+#            ...
+#        elif fmt == 'context':
+#            ...
+#        elif fmt == 'git':
+#            ...
+#        else:
+#            raise ValueError(f'unsupported fmt {fmt!r}')
+#
+#
+#class Diff:
+#
+#    def __init__(self, hunks):
+#
+#class FileDiffCounts(namedtuple('FileDiffCounts', 'insertions deletions')):
+#
+#    _lineart = None
+#
+#    def 
+#
+#    @property
+#    def total(self):
+#        return self.insertions + self.deletions
+#
+#    def format_diffstat(self, filename, width=None):
+#        # e.g. "NNN {self.lineart(width-3}"
+#        raise NotImplementedError
+#
+#
+#class FileDiffStat(namedtuple('FileDiffStat', 'status insertions deletions')):
+#
+#    _raw = None
+#
+#    STATUSES = {
+#        'A': 'added',
+#        'C': 'copied',
+#        'D': 'deleted',
+#        'M': 'modified',
+#        'R': 'renamed',  # moved
+#        'T': 'file type changed',
+#        'U': 'unmerged',
+#        #'X': '<unknown>,
+#    }
+#
+#    def __str__(self):
+#        ...
+#
+#
+#class FileDiff:
+#
+#    _raw = None
+#    _text = None
+#    _parts = None
+#
+#    def __init__(self, filename, status, diffstat=None, parts=None):
+#        self.filename = filename
+#        self.status = status
+#        self.diffstat = FileDiffStat.from_raw(diffstat)
+#        self.parts = FileDiffPart
+#
+#    def render(self, fmt=None):
+#        # --name-only
+#        # --name-status
+
+
+class FileDiffStat(namedtuple('FileDiffStat',
+                              'name oldname status additions deletions')):
+
+    STATUSES = {
+        'A': 'added',
+        'C': 'copied',
+        'D': 'deleted',
+        'M': 'modified',
+        'R': 'renamed',  # moved
+        'T': 'file type changed',
+        'U': 'unmerged',
+        #'X': '<unknown>,
+    }
+
+    @classmethod
+    def parse_all(cls, lines, fmt=None):
+        if isinstance(lines, str):
+            lines = lines.splitlines()
+        if not fmt:
+            fmt = '<default>'
+
+        if fmt == '<default>':
+            lines = iter(lines)
+            for count, line in enumerate(lines):
+                m = re.match(r'^ *(\d+) file', line)
+                if m:
+                    break
+                yield cls._parse(line, fmt)
+
+            else:
+                raise NotImplementedError
+            expected, = m.groups()
+            assert count == expected, (count, expected)
+            try:
+                next(lines)
+            except StopIteration:
+                pass
+
+        else:
+            for line in lines:
+                ...
+
+
+    @classmethod
+    def parse(cls, line, fmt=None):
+        if not fmt:
+            fmt = '<default>'
+        return cls._parse(line, fmt)
+
+    @classmethod
+    def _parse(cls, line, fmt):
+        oldname = status = additions = deletions = total = None
+
+        if fmt == '<default>':
+            name, _, changed = line.partition('|')
+            name = name.strip()
+            if ' => ' in name:
+                oldname, name = split(' => ')
+                assert oldname and name, (line,)
+            total, lineart = changed.split()
+            total = int(total)
+            if '+' in lineart:
+                if '-' in lineart:
+                    status = 'M'
+                else:
+                    # XXX or 'M'?
+                    status = 'A'
+            elif '-' in lineart:
+                # XXX or 'M'?
+                status = 'D'
+            else:
+                raise NotImplementedError((line,))
+            if oldname:
+                # XXX What about the old status?
+                status = 'R'
+        elif fmt == '--name-only':
+            name = line
+        elif fmt == '--name-status':
+            status, name = line.split()
+        else:
+            raise ValueError(f'unsupported fmt {fmt!r}')
+
+        self = cls(name, status, additions, deletions)
+        if total is not None:
+            self._total = total
+        return self
+
+    @property
+    def total(self):
+        try:
+            return self._total
+        except AttributeError:
+            if self.additions is None:
+                if self.deletions is None:
+                    self._total = None
+                else:
+                    # XXX Is this okay?
+                    self._total = self.additions
+            elif self.deletions is None:
+                # XXX Is this okay?
+                self._total = self.deletions
+            else:
+                self._total = self.additions + self.deletions
+            return self._total
+
+    def apply_to_dir_listing(self, names):
+        name = os.path.relpath(self.name, reldir)
+        if os.path.sep in name:
+            return
+        elif self.status == 'A':
+            assert name not in files, self
+            files.append(name)
+        elif self.status == 'R':
+            assert self.oldname, self
+            oldname = os.path.relpath(self.oldname, reldir)
+            if os.path.sep not in name:
+                assert name not in files, self
+                files.append(name)
+                if os.path.sep not in oldname:
+                    assert oldname in files, self
+                    files.remove(oldname)
+            else:
+                assert os.path.sep not in oldname, self
+                assert oldname in files, self
+                files.remove(oldname)
+        else:
+            assert name in files, self
+            if self.status == 'D':
+                files.remove(name)
+            elif self.status in 'MT':
+                pass
+            elif self.status == 'C':
+                raise NotImplementedError(self)
+            elif self.status == 'U':
+                raise NotImplementedError(self)
+            elif self.status == 'X':
+                raise NotImplementedError(self)
+            else:
+                raise NotImplementedError(self)
+
+
+#############################
+# repos
+
+class RevisionNotFoundError(KeyError):
+    ...
 
 
 def resolve_repo(repo):
@@ -133,21 +438,189 @@ class GitHubRepo:
 
 class Repo:
 
-    def resolve_revision(self, ref):
-        raise NotImplementedError
+    REVISION = HEAD
+    META_REVISIONS = types.MappingProxyType({
+        HEAD: None,
+        # staged changes:
+        STAGED: None,
+        # local changes:
+        LOCAL: None,
+    })
+    FALLBACK_REVISIONS = types.MappingProxyType({
+        'main': 'master',
+    })
+
+    def __init_subclass__(cls):
+        if 'META_REVISIONS' in cls.__dict__:
+            cls._normalize_meta_revisions()
+
+    @classmethod  # class-only
+    def _normalize_meta_revisions(cls):
+        ns = cls.META_REVISIONS
+        for key, value in cls.META_REVISIONS.items():
+            if key:
+                normkey = cls._normalize_meta_revision(key)
+                if normkey is not key:
+                    if isinstance(ns, types.MappingProxyType):
+                        ns = dict(ns)
+                    del ns[key]
+                    ns[normalized] = value
+                    key = normalized
+            if value:
+                normvalue = cls._normalize_meta_revision(value)
+                if normvalue is not value:
+                    if isinstance(ns, types.MappingProxyType):
+                        ns = dict(ns)
+                    ns[key] = normvalue
+                    value = normvalue
+            if key == value:
+                ns[key] = key
+        if ns is not cls.META_REVISIONS:
+            assert not isinstance(cls.META_REVISIONS, types.MappingProxyType)
+            cls.META_REVISIONS = types.MappingProxyType(ns)
+
+    @classmethod
+    def _normalize_meta_revision(cls, ref):
+        for metaref in Repo.META_REVISIONS:
+            if ref == metaref:
+                return metaref
+        return ref
+
+    @classmethod
+    def _resolve_meta_revision(cls, ref):
+        # The last item in the returned list is the final resolution.
+        assert ref
+        seen = set()
+        resolved = [ref]
+        meta = ref
+        while meta in cls.META_REVISIONS:
+            mnext = cls.META_REVISIONS[meta]
+            if mnext is None:
+                raise ValueError(f'meta ref {ref!r} not supported')
+            elif mnext == meta:
+                break
+            meta = mnext
+            assert meta not in seen, (meta, seen)
+            seen.add(meta)
+            resolved.append(meta)
+        return resolved
+
+    @classmethod
+    def _resolve_fallback_revisions(cls, ref, seen=None):
+        candidate = cls.FALLBACK_REVISIONS.get(ref)
+        if not candidate:
+            return []
+        if seen is None:
+            seen = set()
+        elif candidate in seen:
+            return []
+        fallbacks = []
+
+        candidates = [candidate]
+        while candidates:
+            candidate = candidates.pop(0)
+            fallbacks.append(candidate)
+
+            candidate = cls.FALLBACK_REVISIONS.get(candidate)
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            candidates.append(candidate)
+
+        return fallbacks
+
+    @classmethod
+    def _resolve_revisions(cls, ref, fallback=True):
+        if not ref:
+            ref = cls.REVISION
+
+        metarefs = cls._resolve_meta_revision(ref)
+        assert metarefs, (ref,)
+        refs = [metarefs[-1]]
+        seen = set(refs)
+
+        if fallback:
+            for metaref in metarefs:
+                fallbacks = cls._resolve_fallback_revisions(metaref, seen)
+                refs.extend(fallbacks)
+        assert len(refs) == len(seen), (refs, seen)
+
+        return refs
+
+    # "public" methods
+
+    def resolve_revision(self, ref, *, fallback=True):
+        _, res = self._try_resolved_revisions(ref, self._resolve_revision, fallback)
+        return res
 
     def download(self, path, target, revision=None, *,
                  altpath=None,
                  makedirs=True,
                  dummies=None,
+                 fallback=True,
                  ):
+        def download(ref):
+            return self._download(path, target, ref,
+                                  altpath, makedirs, dummies)
+        _, res = self._try_resolved_revisions(revision, download, fallback)
+        return res
+
+    def read(self, path, revision=None, *, encoding=None, fallback=True):
+        def read(ref):
+            return self._read(path, ref, encoding)
+        _, res = self._try_resolved_revisions(revision, read, fallback)
+        return res
+
+    def listdir(self, path=None, revision=None, *, fallback=True):
+        def listdir(ref):
+            return self._listdir(path, ref)
+        _, res = self._try_resolved_revisions(revision, listdir, fallback)
+        return res
+
+    # implemented by subclasses
+
+    def _resolve_revision(self, ref):
         raise NotImplementedError
 
-    def read(self, path, revision=None, *, encoding=None):
+    def _download(self, path, target, revision,
+                  altpath=None, makedirs=True, dummies=None):
         raise NotImplementedError
+
+    def _read(self, path, revision=None, encoding=None):
+        raise NotImplementedError
+
+    def _listdir(self, path=None, revision=None):
+        raise NotImplementedError
+
+    # internal implementation
+
+    def _try_resolved_revisions(self, revision, task, fallback):
+        firstexc = None
+        revisions = self._resolve_revisions(revision, fallback)
+        while revisions:
+            ref = revisions.pop(0)
+            try:
+                return ref, task(ref)
+            except RevisionNotFoundError as exc:
+                if firstexc is None:
+                    if not revisions:
+                        raise  # re-raise
+                    firstexc = exc
+                elif not revisions:
+                    # XXX Raise ExceptionGroup instead of the first exc.
+                    raise firstexc
+        assert 0, 'unreachable!'
 
 
 class RemoteRepo(Repo):
+
+    META_REVISIONS = {
+        HEAD: 'main',
+        # Remote repos don't expose a staging area.
+        STAGED: 'main',
+        # Remote repos don't expose local changes.
+        LOCAL: 'main',
+    }
 
     @classmethod
     def from_raw_url(cls, url, *, localremote=True):
@@ -193,6 +666,44 @@ class RemoteRepo(Repo):
     def __init__(self, url):
         self.url = url
 
+    # Repo method implementations
+
+    def _resolve_revision(self, ref):
+        gh = self._resolve_github()
+        if gh:
+            _, rev, branch = gh.get_commit(ref)
+        else:
+            raise NotImplementedError
+        return rev, branch
+
+    def _download(self, path, target, revision,
+                  altpath=None, makedirs=True, dummies=None):
+        gh = self._resolve_github()
+        if gh:
+            return gh.download(path, target, revision,
+                               altpath=altpath,
+                               makedirs=makedirs,
+                               dummies=dummies)
+        else:
+            raise NotImplementedError
+
+    def _read(self, path, revision=None, encoding=None):
+        gh = self._resolve_github()
+        if gh:
+            return gh.read(path, revision, encoding=encoding)
+        else:
+            raise NotImplementedError
+
+    def _listdir(self, path=None, revision=None):
+        raise NotImplementedError
+
+    # remote-specific methods
+
+    def clone(self, root, branch=None):
+        return Local.from_url(self.url, root, branch=branch)
+
+    # internal implementation
+
     def _resolve_github(self):
         try:
             return self._github
@@ -204,50 +715,18 @@ class RemoteRepo(Repo):
             self._github = GitHubRepo(*github)
             return self._github
 
-    def resolve_revision(self, ref):
-        gh = self._resolve_github()
-        if gh:
-            _, rev, branch = gh.get_commit(ref)
-        else:
-            raise NotImplementedError
-        return rev, branch
-
-    def download(self, path, target, revision=None, *,
-                 altpath=None,
-                 makedirs=True,
-                 dummies=None,
-                 ):
-        if not revision:
-            revision = 'main'
-
-        gh = self._resolve_github()
-        if gh:
-            return gh.download(path, target, revision,
-                               altpath=altpath,
-                               makedirs=makedirs,
-                               dummies=dummies)
-        else:
-            raise NotImplementedError
-
-    def read(self, path, revision=None, *, encoding=None):
-        if not revision:
-            revision = 'main'
-
-        gh = self._resolve_github()
-        if gh:
-            return gh.read(path, revision, encoding=encoding)
-        else:
-            raise NotImplementedError
-
-    # remote-specific methods
-
-    def clone(self, root, branch=None):
-        return Local.from_url(self.url, root, branch=branch)
-
 
 class LocalRepo(Repo):
 
     _GIT = GIT
+
+    #STAGED_ONLY = '<STAGED-ONLY>'
+    META_REVISIONS = {
+        HEAD: HEAD,
+        STAGED: STAGED,
+        LOCAL: LOCAL,
+        #STAGED_ONLY: STAGED_ONLY,
+    }
 
     @classmethod
     def from_url(cls, url, root, *, branch=None):
@@ -271,34 +750,71 @@ class LocalRepo(Repo):
     def __init__(self, root):
         self.root = root
 
-    def _run(self, cmd, *subargv, capture=False):
-        return _run(
-            cmd, subargv, self.root, capture, self._GIT,
-            check=False,
-        )
+    # Repo method implementations
 
-    def _run_text(self, cmd, *subargv):
-        capture = True
-        _, stdout, _ = _run(
-            cmd, subargv, self.root, capture, self._GIT,
-            check=True,
-        )
-        return ec, stdout
-
-    def resolve_revision(self, ref):
+    def _resolve_revision(self, ref):
+        if revision in (STAGED, LOCAL):
+            revision = HEAD
         raise NotImplementedError
 
-    def download(self, path, target, revision=None, *,
-                 altpath=None,
-                 makedirs=True,
-                 dummies=None,
-                 ):
-        raise NotImplementedError
+    def _download(self, path, target, revision,
+                  altpath=None, makedirs=True, dummies=None):
+        filename = self._resolve_filename(path)
+        if revision == '<STAGED>':
+            # Use HEAD with staged files included.
+            raise NotImplementedError
+        elif revision == '<LOCAL>':
+            # Use the current directory.
+            raise NotImplementedError
+        else:
+            raise NotImplementedError
 
-    def read(self, path, revision=None, *, encoding=None):
-        raise NotImplementedError
+    def _read(self, path, revision=None, encoding=None):
+        filename = self._resolve_filename(path)
+        if revision == '<STAGED>':
+            # Read directly from the filesystem if no unstaged changes.
+            # Otherwise read the staged file, if staged, else HEAD.
+            raise NotImplementedError
+        elif revision == '<LOCAL>':
+            # Read the file directly from the filesystem.
+            raise NotImplementedError
+        else:
+            # Read 
+            raise NotImplementedError
+
+    def _listdir(self, path=None, revision=None):
+        if path:
+            reldir = self._resolve_relfile(path)
+            dirname = os.path.join(self.root, reldir)
+        else:
+            reldir = '.'
+            dirname = self.root
+
+        if revision is LOCAL or revision is STAGED:
+            text = self._run_text(
+#                'ls-tree', '--name-only', '--full-name', HEAD, reldir)
+                'ls-tree', '--name-only', HEAD, reldir)
+            files = text.splitlines()
+
+            text = self._run_text('diff', '--name-status', '--cached')
+            for ds in FileDiffStat.parse_all(text, fmt='--name-status'):
+                ds.apply_to_dir_listing(files)
+
+            if revision is LOCAL:
+                text = self._run_text('diff', '--name-status')
+                for ds in FileDiffStat.parse_all(text, fmt='--name-status'):
+                    ds.apply_to_dir_listing(files)
+
+            return files
+        else:
+            text = self._run_text(
+                'ls-tree', '--name-only', revision, reldir)
+            return text.splitlines()
 
     # local-specific methods
+
+    def resolve_filename(self, *path):
+        return self._resolve_absfile(path)
 
     def get_remote(self, name):
         raise NotImplementedError
@@ -326,3 +842,42 @@ class LocalRepo(Repo):
 #            print(f'{remote:20} {url}')
             remotes[remote] = url
         return remotes
+
+    # internal implementation
+
+    def _run(self, cmd, *subargv, capture=False):
+        return _run(
+            cmd, subargv, self.root, capture, self._GIT,
+            check=False,
+        )
+
+    def _run_text(self, cmd, *subargv):
+        capture = True
+        _, stdout, _ = _run(
+            cmd, subargv, self.root, capture, self._GIT,
+            check=True,
+        )
+        return stdout
+
+    def _resolve_relfile(self, path):
+        return os.path.join(
+            *_iter_relpath(path),
+        )
+
+    def _resolve_absfile(self, path):
+        return os.path.join(
+            self.root,
+            *_iter_relpath(path),
+        )
+
+#    def _get_filename(self, path, revision, force=False):
+#        # XXX
+#        raise NotImplementedError
+#        filename = self._resolve_filename(path)
+#        if force:
+#            return filename
+#        elif revision is LOCAL:
+#            return filename
+#        elif revision is STAGED:
+#            if 
+#            ...
