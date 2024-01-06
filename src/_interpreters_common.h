@@ -1,4 +1,10 @@
 
+#define _RESOLVE_MODINIT_FUNC_NAME(NAME) \
+    PyInit_ ## NAME
+#define RESOLVE_MODINIT_FUNC_NAME(NAME) \
+    _RESOLVE_MODINIT_FUNC_NAME(NAME)
+
+
 extern int _PyCrossInterpreterData_RegisterClassLocal(
     PyInterpreterState *interp,
     PyTypeObject *cls,

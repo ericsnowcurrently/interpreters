@@ -32,13 +32,13 @@ setup(
             **EXT_COMMON,
         ),
         Extension(
-            name='_queues',
+            name='_interpqueues',
             sources=['src/_interpqueuesmodule.c',
                      *SOURCES_COMMON],
             **EXT_COMMON,
         ),
         Extension(
-            name='_channels',
+            name='_interpchannels',
             sources=['src/_interpchannelsmodule.c',
                      'src/thread.c',
                      *SOURCES_COMMON],
