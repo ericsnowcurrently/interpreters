@@ -20,7 +20,14 @@ extern PyInterpreterState * _PyInterpreterState_LookUpID(int64_t);
 extern int _PyInterpreterState_IsRunningMain(PyInterpreterState *);
 extern int _PyInterpreterState_SetRunningMain(PyInterpreterState *);
 extern int _PyInterpreterState_SetNotRunningMain(PyInterpreterState *);
-extern void _PyInterpreterState_FailIfRunningMain(PyInterpreterState *);
+//extern void _PyInterpreterState_FailIfRunningMain(PyInterpreterState *);
+#define _PyInterpreterState_FailIfRunningMain(interp) \
+    do { \
+        if (_PyInterpreterState_IsRunningMain(interp)) { \
+            PyErr_SetString(PyExc_RuntimeError, \
+                            "interpreter already running"); \
+        } \
+    } while (0)
 #define PyUnstable_InterpreterState_GetMainModule(INTERP) \
     _PyInterpreterState_GetMainModule(INTERP)
 #define _PyThreadState_GET PyThreadState_GET
