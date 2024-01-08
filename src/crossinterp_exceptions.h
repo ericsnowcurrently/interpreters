@@ -13,10 +13,10 @@ init_exceptions(PyInterpreterState *interp)
 
     // "PyExc_InterpreterError"
     exctype = PyErr_NewExceptionWithDoc(
-        "PyExc_InterpreterError",
+        "_interpreters.PyExc_InterpreterError",
         "A cross-interpreter operation failed",
         NULL, NULL);
-    if (exctype != NULL) {
+    if (exctype == NULL) {
         err = -1;
         goto finally;
     }
@@ -29,10 +29,10 @@ init_exceptions(PyInterpreterState *interp)
 
     // PyExc_InterpreterNotFoundError
     exctype = PyErr_NewExceptionWithDoc(
-        "PyExc_InterpreterNotFoundError",
+        "_interpreters.PyExc_InterpreterNotFoundError",
         "An interpreter was not found",
         basetype, NULL);
-    if (exctype != NULL) {
+    if (exctype == NULL) {
         err = -1;
         goto finally;
     }
@@ -46,7 +46,7 @@ init_exceptions(PyInterpreterState *interp)
     exctype = PyErr_NewException(
         "_interpreters.NotShareableError",
         PyExc_ValueError, NULL);
-    if (exctype != NULL) {
+    if (exctype == NULL) {
         err = -1;
         goto finally;
     }
@@ -99,7 +99,6 @@ _get_exctype(PyInterpreterState *interp, const char *name)
         assert(PyErr_Occurred());
         return NULL;
     }
-    Py_DECREF(exctype);
     return exctype;
 }
 
@@ -131,7 +130,7 @@ _PyInterpreterState_LookUpIDFixed(int64_t id)
 #undef ARGS
     // We don't need to decref the existing ob_type
     // bcause it is a builtin static type.
-    exc->ob_type = (PyTypeObject *)PyExc_InterpreterError;
+    exc->ob_type = (PyTypeObject *)PyExc_InterpreterNotFoundError;
     PyErr_SetRaisedException(exc);
     return NULL;
 }
