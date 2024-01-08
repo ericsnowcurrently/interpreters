@@ -409,6 +409,27 @@ def _fix_file(filename, fix):
 
 
 def fix_all(files):
+    def fix__interpretersmodule_c(text):
+        text = text.replace(
+            '#define MODULE_NAME _xxsubinterpreters',
+            '#define MODULE_NAME _interpreters',
+        )
+        return text
+
+    def fix__interpchannelsmodule_c(text):
+        text = text.replace(
+            '#define MODULE_NAME _xxinterpchannels',
+            '#define MODULE_NAME _interpchannels',
+        )
+        return text
+
+    def fix__interpchannelsmodule_c(text):
+        text = text.replace(
+            '#define MODULE_NAME _xxinterpchannels',
+            '#define MODULE_NAME _interpchannels',
+        )
+        return text
+
     def fix_crossinterp_h(text):
         # s/^struct _xid {/struct _xid_new {/
         text = text.replace('struct _xid {', 'struct _xid_new {')
@@ -416,7 +437,13 @@ def fix_all(files):
 
     for filename in files:
         basename = os.path.basename(filename)
-        if basename == 'pycore_crossinterp.h':
+        if basename == '_interpreters.c':
+            fix = fix__interpretersmodule_c
+        elif basename == '_interpqueues.c':
+            fix = fix__interpqueuesmodule_c
+        elif basename == '_interpchannels.c':
+            fix = fix__interpchannelsmodule_c
+        elif basename == 'pycore_crossinterp.h':
             fix = fix_crossinterp_h
         else:
             continue
