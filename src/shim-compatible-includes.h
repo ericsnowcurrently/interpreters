@@ -17,7 +17,6 @@ _PyIndex_Check(PyObject *obj)
 
 // pycore_pystate.h
 extern PyInterpreterState * _PyInterpreterState_LookUpID(int64_t);
-extern PyInterpreterState * PyInterpreterID_LookUp(PyObject *);
 extern int _PyInterpreterState_IsRunningMain(PyInterpreterState *);
 extern int _PyInterpreterState_SetRunningMain(PyInterpreterState *);
 extern int _PyInterpreterState_SetNotRunningMain(PyInterpreterState *);

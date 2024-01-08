@@ -6,6 +6,10 @@
 #define _PyThreadState_WHENCE_EXEC 4
 #define PyInterpreterState_GetIDObject _PyInterpreterState_GetIDObject
 
+// interpreteridobject.h
+//extern PyInterpreterState * PyInterpreterID_LookUp(PyObject *);
+#define PyInterpreterID_LookUp _PyInterpreterID_LookUp
+
 // pycore_tstate.h
 #define _PyThreadState_SetWhence(TSTATE, WHENCE)
 
