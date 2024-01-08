@@ -84,6 +84,8 @@ INCLUDES = [
 INCLUDES_INDIRECT = [
     '/Include/internal/pycore_lock.h',
     '/Include/internal/pycore_moduleobject.h',
+    '/Include/internal/pycore_critical_section.h',
+    '/Include/internal/pycore_object.h',
 ]
 
 #PUBLIC_NOT_USED = set([
@@ -117,11 +119,13 @@ USE_SHIM = set([
     '/Include/internal/pycore_ceval.h',
     '/Include/internal/pycore_namespace.h',
 #    '/Include/internal/pycore_typeobject.h',
-    '/Include/internal/pycore_weakref.h',
+#    '/Include/internal/pycore_weakref.h',
     '/Include/internal/pycore_pythread.h',
 
     '/Include/internal/pycore_lock.h',
 #    '/Include/internal/pycore_moduleobject.h',
+    '/Include/internal/pycore_critical_section.h',
+    '/Include/internal/pycore_object.h',
 ])
 
 

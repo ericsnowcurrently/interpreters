@@ -49,8 +49,9 @@ extern void _PyInterpreterState_IDDecref(PyInterpreterState *);
 // pycore_namespace.h
 extern PyObject* _PyNamespace_New(PyObject *);
 
-// pycore_weakref.h
-extern PyObject* _PyWeakref_GET_REF(PyObject *);
+// pycore_critical_section.h
+#define Py_BEGIN_CRITICAL_SECTION(ref_obj)
+#define Py_END_CRITICAL_SECTION()
 
 // pycore_global_objects.h
 #define _Py_EMPTY_STR PyUnicode_InternFromString("")
