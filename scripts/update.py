@@ -82,6 +82,7 @@ INCLUDES = [
 ]
 INCLUDES_INDIRECT = [
     '/Include/internal/pycore_lock.h',
+    '/Include/internal/pycore_moduleobject.h',
 ]
 
 #PUBLIC_NOT_USED = set([
@@ -114,11 +115,12 @@ USE_SHIM = set([
 
     '/Include/internal/pycore_ceval.h',
     '/Include/internal/pycore_namespace.h',
-    '/Include/internal/pycore_typeobject.h',
+#    '/Include/internal/pycore_typeobject.h',
     '/Include/internal/pycore_weakref.h',
     '/Include/internal/pycore_pythread.h',
 
     '/Include/internal/pycore_lock.h',
+#    '/Include/internal/pycore_moduleobject.h',
 ])
 
 
@@ -430,9 +432,17 @@ def fix_all(files):
         )
         return text
 
-    def fix_crossinterp_h(text):
+    def fix_pycore_crossinterp_h(text):
         # s/^struct _xid {/struct _xid_new {/
         text = text.replace('struct _xid {', 'struct _xid_new {')
+        return text
+
+    def fix_typeobject_h(text):
+        text = text.replace(
+            'PyAPI_FUNC(PyObject *) _PyType_GetModuleName(PyTypeObject *);',
+            ('#define _PyType_GetModuleName(cls) '
+             '    PyObject_GetAttrString((PyObject *)cls, "__module__")'),
+        )
         return text
 
     for filename in files:
@@ -444,7 +454,9 @@ def fix_all(files):
         elif basename == '_interpchannels.c':
             fix = fix__interpchannelsmodule_c
         elif basename == 'pycore_crossinterp.h':
-            fix = fix_crossinterp_h
+            fix = fix_pycore_crossinterp_h
+        elif basename == 'pycore_typeobject.h':
+            fix = fix_typeobject_h
         else:
             continue
         debug(f'+ fixing ./{os.path.relpath(filename)}')

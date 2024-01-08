@@ -47,6 +47,10 @@ extern int _PyEval_AddPendingCall(
 // pylifecycle.h
 #define PyUnstable_AtExit _Py_AtExit
 
+// pycore_typeobject.h
+// _PyType_GetModuleName() is added via a fix in update.py.
+//extern PyObject * _PyType_GetModuleName(PyTypeObject *);
+
 // pycore_pythread.h
 #define PyThread_UNSET_TIMEOUT ((_PyTime_t)(-1 * 1000 * 1000 * 1000))
 extern int PyThread_ParseTimeoutArg(

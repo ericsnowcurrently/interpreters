@@ -31,11 +31,6 @@ extern int _PyInterpreterState_IDInitref(PyInterpreterState *);
 extern int _PyInterpreterState_IDIncref(PyInterpreterState *);
 extern void _PyInterpreterState_IDDecref(PyInterpreterState *);
 
-// pycore_typeobject.h
-extern int _PyStaticType_InitBuiltin(PyInterpreterState *, PyTypeObject *);
-extern void _PyStaticType_Dealloc(PyInterpreterState *, PyTypeObject *);
-extern PyObject * _PyType_GetModuleName(PyTypeObject *);
-
 // pycore_ceval.h
 #define _Py_EnterRecursiveCallTstate(TSTATE, WHERE) \
     Py_EnterRecursiveCall(WHERE)
