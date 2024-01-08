@@ -2,15 +2,14 @@
 
 PROJECT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-UTCNOW="$(date --utc +'%Y%m%d-%H%M%S')"
-UNPACKED_DIR="build/unpacked-$UTCNOW"
-
-source cpython_helpers.sh
+#UTCNOW="$(date --utc +'%Y%m%d-%H%M%S')"
 
 
 &>/dev/null pushd $PROJECT_DIR
 
 if [ -z "$PYTHON_312" ]; then
+    source cpython_helpers.sh
+
     exe_file=build/PYTHON_312
     find-cpython 3.12 "$exe_file"
     if [ -e "$exe_file" ]; then
@@ -35,6 +34,7 @@ venv_root=$PROJECT_DIR/build/venv_312
 #"$PYTHON_312" -m venv --clear $venv_root
 venv_exe=$venv_root/bin/python3.12
 
+set -e
 (set -x
 "$venv_exe" -m pip install --upgrade pip
 "$venv_exe" -m pip install --upgrade setuptools
@@ -47,17 +47,6 @@ venv_exe=$venv_root/bin/python3.12
 #interpreters_3_12-0.0.1.1-cp312-cp312-linux_x86_64.whl
 DIST_TARBALL=$(ls dist/interpreters_3_12-*.tar.gz)
 DIST_WHEEL=$(ls dist/interpreters_3_12-*.whl)
-
-#mkdir $UNPACKED_DIR
-#tar -C $UNPACKED_DIR -xzf "$(ls dist/*.tar.gz)"
-#&>/dev/null pushd $UNPACKED_DIR
-#(set -x
-#"$venv_exe" -c 'import _interpreters'
-#"$venv_exe" -c 'import _interpchannels'
-#"$venv_exe" -c 'import _interpqueues'
-#)
-#&>/dev/null popd
-#rm -r $UNPACKED_DIR
 
 (set -x
 "$venv_exe" -m pip install $DIST_TARBALL
