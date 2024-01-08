@@ -7,7 +7,8 @@
 #define PyInterpreterState_GetIDObject _PyInterpreterState_GetIDObject
 
 // pyerrors.h
-#define PyErr_FormatUnraisable PyErr_WriteUnraisable
+#define PyErr_FormatUnraisable(msg) \
+    _PyErr_WriteUnraisableMsg(msg, NULL)
 
 // interpreteridobject.h
 //extern PyInterpreterState * PyInterpreterID_LookUp(PyObject *);

@@ -1,6 +1,9 @@
 
 #include "Python.h"
 
+// initconfig.h
+PyAPI_FUNC(PyObject *) _PyErr_SetFromPyStatus(PyStatus status);
+
 // pycore_long.h
 #define SIGN_MASK 3
 #define SIGN_NEGATIVE 2
