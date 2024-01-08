@@ -15,9 +15,9 @@ extern "C" {
 /* exceptions */
 /**************/
 
-extern PyObject * _get_exctype(const char *);
+extern PyObject * _get_exctype(PyInterpreterState *, const char *);
 #define GET_EXC_TYPE(TYPE) \
-    _get_exctype(#TYPE)
+    _get_exctype(PyInterpreterState_Get(), #TYPE)
 #define PyExc_InterpreterError \
     GET_EXC_TYPE(PyExc_InterpreterError)
 #define PyExc_InterpreterNotFoundError \

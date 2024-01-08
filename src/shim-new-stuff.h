@@ -31,14 +31,6 @@ typedef struct _PyMutex { uint8_t v; } PyMutex;
 extern void PyMutex_Lock(PyMutex *);
 extern void PyMutex_Unlock(PyMutex *);
 
-// pycore_interp.h
-// XXX
-extern struct _xi_state * _PyInterpreterState_GetXIState(PyInterpreterState *);
-//static inline struct _xi_state *
-//_PyInterpreterState_GetXIState(PyInterpreterState *interp)
-//{
-//}
-
 // pycore_ceval_state.h
 typedef int (*_Py_pending_call_func)(void *);
 

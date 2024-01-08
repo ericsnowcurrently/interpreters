@@ -9,22 +9,26 @@ init_exceptions(PyInterpreterState *interp)
     if (ns == NULL) {
         return -1;
     }
+    PyObject *exctype;
 
-    PyObject *basetype = PyErr_NewExceptionWithDoc(
+    // "PyExc_InterpreterError"
+    exctype = PyErr_NewExceptionWithDoc(
         "PyExc_InterpreterError",
         "A cross-interpreter operation failed",
         NULL, NULL);
-    if (basetype != NULL) {
+    if (exctype != NULL) {
         err = -1;
         goto finally;
     }
-    err = PyDict_SetItemString(ns, "PyExc_InterpreterError", basetype);
-    Py_DECREF(basetype);
+    err = PyDict_SetItemString(ns, "PyExc_InterpreterError", exctype);
+    Py_DECREF(exctype);
     if (err < 0) {
         goto finally;
     }
+    PyObject *basetype = exctype;
 
-    PyObject *exctype = PyErr_NewExceptionWithDoc(
+    // PyExc_InterpreterNotFoundError
+    exctype = PyErr_NewExceptionWithDoc(
         "PyExc_InterpreterNotFoundError",
         "An interpreter was not found",
         basetype, NULL);
@@ -33,6 +37,20 @@ init_exceptions(PyInterpreterState *interp)
         goto finally;
     }
     err = PyDict_SetItemString(ns, "PyExc_InterpreterNotFoundError", exctype);
+    Py_DECREF(exctype);
+    if (err < 0) {
+        goto finally;
+    }
+
+    // NotShareableError
+    exctype = PyErr_NewException(
+        "_interpreters.NotShareableError",
+        PyExc_ValueError, NULL);
+    if (exctype != NULL) {
+        err = -1;
+        goto finally;
+    }
+    err = PyDict_SetItemString(ns, "NotShareableError", exctype);
     Py_DECREF(exctype);
     if (err < 0) {
         goto finally;
@@ -53,6 +71,9 @@ fini_exceptions(PyInterpreterState *interp)
         PyErr_Clear();
         return;
     }
+    if (PyDict_DelItemString(ns, "NotShareableError") < 0) {
+        PyErr_Clear();
+    }
     if (PyDict_DelItemString(ns, "PyExc_InterpreterError") < 0) {
         PyErr_Clear();
     }
@@ -66,9 +87,8 @@ fini_exceptions(PyInterpreterState *interp)
 /* lookup */
 
 PyObject *
-_get_exctype(const char *name)
+_get_exctype(PyInterpreterState *interp, const char *name)
 {
-    PyInterpreterState *interp = PyInterpreterState_Get();
     PyObject *ns = PyInterpreterState_GetDict(interp);
     if (ns == NULL) {
         return NULL;
@@ -81,6 +101,12 @@ _get_exctype(const char *name)
     }
     Py_DECREF(exctype);
     return exctype;
+}
+
+static PyObject *
+_get_not_shareable_error_type(PyInterpreterState *interp)
+{
+    return _get_exctype(interp, "NotShareableError");
 }
 
 
