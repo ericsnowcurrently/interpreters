@@ -6,6 +6,9 @@
 #define _PyThreadState_WHENCE_EXEC 4
 #define PyInterpreterState_GetIDObject _PyInterpreterState_GetIDObject
 
+// pyerrors.h
+#define PyErr_FormatUnraisable PyErr_WriteUnraisable
+
 // interpreteridobject.h
 //extern PyInterpreterState * PyInterpreterID_LookUp(PyObject *);
 #define PyInterpreterID_LookUp _PyInterpreterID_LookUp
