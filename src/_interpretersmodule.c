@@ -102,7 +102,7 @@ look_up_interp(PyObject *arg)
     if (id < 0) {
         return NULL;
     }
-    return _PyInterpreterState_LookUpID(id);
+    return _PyInterpreterState_LookUpIDFixed(id);
 }
 
 
@@ -172,7 +172,7 @@ xibufferview_from_xid(PyTypeObject *cls, _PyCrossInterpreterData *data)
 static void
 xibufferview_dealloc(XIBufferViewObject *self)
 {
-    PyInterpreterState *interp = _PyInterpreterState_LookUpID(self->interpid);
+    PyInterpreterState *interp = _PyInterpreterState_LookUpIDFixed(self->interpid);
     /* If the interpreter is no longer alive then we have problems,
        since other objects may be using the buffer still. */
     assert(interp != NULL);

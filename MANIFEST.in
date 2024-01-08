@@ -4,6 +4,7 @@ include src/shim-new-stuff.h
 
 include src/crossinterp.c
 include src/crossinterp_data_lookup.h
+include src/crossinterp_exceptions.h
 include src/_interpreters_common.h
 include src/thread.c
 include src/abstract.c

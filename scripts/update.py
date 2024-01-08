@@ -51,6 +51,7 @@ SRC_C = [
 #    '/Modules/_interpreters_common.h',
     '/Python/crossinterp.c',
 #    '/Python/crossinterp_data_lookup.h',
+#    '/Python/crossinterp_exceptions.h',
     '/Python/thread.c',
     '/Objects/abstract.c',
 ]
@@ -416,6 +417,10 @@ def fix_all(files):
             '#define MODULE_NAME _xxsubinterpreters',
             '#define MODULE_NAME _interpreters',
         )
+        text = text.replace(
+            '_PyInterpreterState_LookUpID(',
+            '_PyInterpreterState_LookUpIDFixed(',
+        )
         return text
 
     def fix__interpchannelsmodule_c(text):
@@ -429,12 +434,39 @@ def fix_all(files):
         text = text.replace(
             '#define MODULE_NAME _xxinterpchannels',
             '#define MODULE_NAME _interpchannels',
+        )
+        return text
+
+    def fix_crossinterp_c(text):
+        text = text.replace(
+            '_PyInterpreterState_LookUpID(',
+            '_PyInterpreterState_LookUpIDFixed(',
         )
         return text
 
     def fix_pycore_crossinterp_h(text):
         # s/^struct _xid {/struct _xid_new {/
         text = text.replace('struct _xid {', 'struct _xid_new {')
+
+        text = text.replace(
+            'PyAPI_DATA(PyObject *) PyExc_InterpreterError;',
+            textwrap.dedent('''\
+            extern PyObject * _get_exctype(const char *);
+            #define GET_EXC_TYPE(TYPE) \
+                _get_exctype(#TYPE)
+            #define PyExc_InterpreterError \
+                GET_EXC_TYPE(PyExc_InterpreterError)
+            ''').rstrip(),
+        )
+        text = text.replace(
+            'PyAPI_DATA(PyObject *) PyExc_InterpreterNotFoundError;',
+            textwrap.dedent('''\
+            #define PyExc_InterpreterNotFoundError \
+                GET_EXC_TYPE(PyExc_InterpreterNotFoundError)
+
+            PyInterpreterState * _PyInterpreterState_LookUpIDFixed(int64_t);
+            ''').rstrip(),
+        )
         return text
 
     def fix_typeobject_h(text):
@@ -453,6 +485,8 @@ def fix_all(files):
             fix = fix__interpqueuesmodule_c
         elif basename == '_interpchannels.c':
             fix = fix__interpchannelsmodule_c
+        elif basename == 'crossinterp.c':
+            fix = fix_crossinterp_c
         elif basename == 'pycore_crossinterp.h':
             fix = fix_pycore_crossinterp_h
         elif basename == 'pycore_typeobject.h':

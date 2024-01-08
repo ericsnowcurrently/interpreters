@@ -60,3 +60,19 @@ extern PyLockStatus PyThread_acquire_lock_timed_with_retries(
 
 // pycore_pybuffer.h
 extern int _PyBuffer_ReleaseInInterpreterAndRawFree(PyInterpreterState *, Py_buffer *);
+
+
+/*
+// pycore_crossinterp.h
+_PyXI_session
+_PyXI_Enter()
+_PyXI_Exit()
+_PyXI_ApplyError()
+_PyXI_ApplyCapturedException()
+PyExc_InterpreterError
+PyExc_InterpreterNotFoundError
+
+// pycore_typeobject.h
+_PyStaticType_InitBuiltin()
+_PyStaticType_Dealloc()
+*/
