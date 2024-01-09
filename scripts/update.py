@@ -425,6 +425,27 @@ def fix_all(files):
             '_PyInterpreterState_LookUpID(',
             '_PyInterpreterState_LookUpIDFixed(',
         )
+        text = text.replace(
+            'module_state *state = get_module_state(mod);',
+            textwrap.dedent('''\
+            module_state *state = get_module_state(mod);',
+
+            PyInterpreterState *interp = PyInterpreterState_Get();
+            PyStatus status = _PyXI_InitTypes(interp);
+            if (PyStatus_Exception(status)) {
+                _PyErr_SetFromPyStatus(status);
+                return -1;
+            }
+            ''').rstrip(),
+        )
+        text = text.replace(
+            'clear_module_state(state);',
+            textwrap.dedent('''\
+            clear_module_state(state);
+            _PyXI_FiniTypes(PyInterpreterState_Get());
+            ''').rstrip(),
+            count=1,
+        )
         return text
 
     def fix__interpchannelsmodule_c(text):

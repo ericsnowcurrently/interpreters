@@ -1115,6 +1115,13 @@ module_exec(PyObject *mod)
 {
     module_state *state = get_module_state(mod);
 
+    PyInterpreterState *interp = PyInterpreterState_Get();
+    PyStatus status = _PyXI_InitTypes(interp);
+    if (PyStatus_Exception(status)) {
+        _PyErr_SetFromPyStatus(status);
+        return -1;
+    }
+
     // exceptions
     if (PyModule_AddType(mod, (PyTypeObject *)PyExc_InterpreterError) < 0) {
         goto error;
@@ -1154,6 +1161,7 @@ module_clear(PyObject *mod)
     module_state *state = get_module_state(mod);
     assert(state != NULL);
     clear_module_state(state);
+    _PyXI_FiniTypes(PyInterpreterState_Get());
     return 0;
 }
 
