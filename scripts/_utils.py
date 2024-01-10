@@ -1,3 +1,4 @@
+import datetime
 import glob
 import json
 import logging
@@ -12,6 +13,44 @@ from urllib.error import HTTPError
 
 
 logger = logging.getLogger('_utils')
+
+
+#######################################
+# datetime
+
+def normalize_timestamp(timestamp=None):
+    if timestamp is None:
+        return datetime.datetime.utcnow()
+    else:
+        raise NotImplementedError(repr(timestamp))
+
+
+#######################################
+# formatting
+
+INDENT = ' ' * 4
+
+
+def normalize_indent(indent):
+    if isinstance(indent, str):
+        return indent
+    elif isinstance(indent, int):
+        return ' ' * indent
+    elif not indent:
+        return ''
+    else:
+        raise TypeError(f'unsupported indent {indent!r}')
+
+
+def normalize_depth(depth):
+    if depth is None:
+        return 0
+    elif not isinstance(depth, int):
+        raise TypeError(f'unsupported depth {depth!r}')
+    elif depth < 0:
+        return 0
+    else:
+        return depth
 
 
 #######################################
@@ -63,6 +102,25 @@ def run(cmd, *argv, capture=False, **kwargs):
 
 #######################################
 # filesystem
+
+def normalize_filename(filename, relroot=None):
+    if not filename:
+        raise ValueError('missing filename')
+    elif not isinstance(filename, str):
+        orig = filename
+        try:
+            filename, *_ = filename
+        except TypeError:
+            raise TypeError(f'unsupported filename {filename!r}')
+        if not filename or not isinstance(filename, str):
+            raise ValueError(f'unsupported filename {orig!r}')
+    if relroot is None:
+        return filename
+    elif not relroot:
+        raise NotImplementedError(repr(filename))
+    else:
+        return os.path.relpath(filename, relroot)
+
 
 def _maybe_make_parent_dir(filename, makedirs=True, *, _knowndirs=set()):
     if makedirs is True:
@@ -117,6 +175,25 @@ def touch(filename, *, makedirs=True):
 
 #######################################
 # network
+
+def validate_path(path):
+    if not path:
+        raise ValueError('missing path')
+    elif not isinstance(path, str):
+        raise TypeError(f'expected str path, got {path!r}')
+    elif not path.startswith('/'):
+        raise ValueError('expected leading /, got {path!r}')
+
+
+def normalize_url_str(url):
+    if not url:
+        raise ValueError('missing url')
+    urlstr = str(url)
+    if not urlstr:
+        raise ValueError(f'invalid url {url!r}')
+    # XXX Validate it further?
+    return urlstr
+
 
 def parse_url(url):
     filename = None

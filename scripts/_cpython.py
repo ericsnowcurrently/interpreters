@@ -1,10 +1,11 @@
 #import re
 
 import _git
+import _utils
 
 
 def _assert_valid_path(path, files):
-    assert path.startswith('/'), repr(path)
+    _utils.validate_path(path)
     if files is not None:
         if __debug__:
             if path in files:
