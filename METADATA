@@ -1,0 +1,39 @@
+
+[DEFAULT]
+timestamp = 2024-01-10 03:59:43
+
+[upstream]
+repo = https://github.com/python/cpython
+revision = 5d8a3e74b51a59752f24cb869e7daa065b673f83
+branch = main
+
+[files]
+downloaded = {
+    /Include/internal/pycore_abstract.h           -> src/orig/Include/internal/pycore_abstract.h
+    /Include/internal/pycore_ceval.h              -> src/orig/Include/internal/pycore_ceval.h
+    /Include/internal/pycore_critical_section.h   -> src/orig/Include/internal/pycore_critical_section.h
+    /Include/internal/pycore_crossinterp.h        -> src/orig/Include/internal/pycore_crossinterp.h
+    /Include/internal/pycore_initconfig.h         -> src/orig/Include/internal/pycore_initconfig.h
+    /Include/internal/pycore_interp.h             -> src/orig/Include/internal/pycore_interp.h
+    /Include/internal/pycore_lock.h               -> src/orig/Include/internal/pycore_lock.h
+    /Include/internal/pycore_long.h               -> src/orig/Include/internal/pycore_long.h
+    /Include/internal/pycore_modsupport.h         -> src/orig/Include/internal/pycore_modsupport.h
+    /Include/internal/pycore_moduleobject.h       -> src/orig/Include/internal/pycore_moduleobject.h
+    /Include/internal/pycore_namespace.h          -> src/orig/Include/internal/pycore_namespace.h
+    /Include/internal/pycore_object.h             -> src/orig/Include/internal/pycore_object.h
+    /Include/internal/pycore_pybuffer.h           -> src/orig/Include/internal/pycore_pybuffer.h
+    /Include/internal/pycore_pyerrors.h           -> src/orig/Include/internal/pycore_pyerrors.h
+    /Include/internal/pycore_pystate.h            -> src/orig/Include/internal/pycore_pystate.h
+    /Include/internal/pycore_pythread.h           -> src/orig/Include/internal/pycore_pythread.h
+    /Include/internal/pycore_typeobject.h         -> src/orig/Include/internal/pycore_typeobject.h
+    /Include/internal/pycore_weakref.h            -> src/orig/Include/internal/pycore_weakref.h
+    /Lib/interpreters/__init__.py                 -> src/orig/Lib/test/support/interpreters/__init__.py
+    /Lib/interpreters/channels.py                 -> src/orig/Lib/test/support/interpreters/channels.py
+    /Lib/interpreters/queues.py                   -> src/orig/Lib/test/support/interpreters/queues.py
+    /Modules/_interpchannelsmodule.c              -> src/orig/Modules/_xxinterpchannelsmodule.c
+    /Modules/_interpqueuesmodule.c                -> src/orig/Modules/_xxinterpqueuesmodule.c
+    /Modules/_interpretersmodule.c                -> src/orig/Modules/_xxsubinterpretersmodule.c
+    /Objects/abstract.c                           -> src/orig/Objects/abstract.c
+    /Python/crossinterp.c                         -> src/orig/Python/crossinterp.c
+    /Python/thread.c                              -> src/orig/Python/thread.c
+    }
