@@ -85,274 +85,6 @@ def parse_url(url):
 
 
 #############################
-# diff
-
-#class DiffLine(namedtuple('DiffLine', 'kind a b')):
-#
-#class DiffHunk(namedtuple('DiffHunk', 'range_a range_b kind lines')):
-#
-#    KINDS = {
-#        'a': 'added',
-#        'd': 'deleted',
-#        'c': 'changed',
-#    }
-#
-#    def __str__(self):
-#        return self._text
-#
-#    def __repr__(self):
-#        raise NotImplementedError
-#
-#    @property
-#    def lines(self):
-#        try:
-#            return list(self._lines)
-#        except AttributeError:
-#            self._lines = self.render().splitlines()
-#            return list(self._lines)
-#
-#    @property
-#    def total(self):
-#        return self.additions + self.deletions
-#
-#    @property
-#    def additions(self):
-#        try:
-#            return self._additions
-#        except AttributeError:
-#            raise NotImplementedError
-#            return self._additions
-#
-#    @property
-#    def deletions(self):
-#        try:
-#            return self._deletions
-#        except AttributeError:
-#            raise NotImplementedError
-#            return self._deletions
-#
-#    def lines_a(self):
-#        ...
-#
-#    def lines_b(self):
-#        ...
-#
-#    def iter_lines(self, start=None):
-#        if self.kind == 'a':
-#        for line in 
-#        ...
-#
-#    def render(self, fmt=None):
-#        if not fmt:
-#            fmt = 'traditional'
-#
-#        if fmt == 'traditional':
-#            ...
-#        elif fmt == 'context':
-#            ...
-#        elif fmt == 'git':
-#            ...
-#        else:
-#            raise ValueError(f'unsupported fmt {fmt!r}')
-#
-#
-#class Diff:
-#
-#    def __init__(self, hunks):
-#
-#class FileDiffCounts(namedtuple('FileDiffCounts', 'insertions deletions')):
-#
-#    _lineart = None
-#
-#    def 
-#
-#    @property
-#    def total(self):
-#        return self.insertions + self.deletions
-#
-#    def format_diffstat(self, filename, width=None):
-#        # e.g. "NNN {self.lineart(width-3}"
-#        raise NotImplementedError
-#
-#
-#class FileDiffStat(namedtuple('FileDiffStat', 'status insertions deletions')):
-#
-#    _raw = None
-#
-#    STATUSES = {
-#        'A': 'added',
-#        'C': 'copied',
-#        'D': 'deleted',
-#        'M': 'modified',
-#        'R': 'renamed',  # moved
-#        'T': 'file type changed',
-#        'U': 'unmerged',
-#        #'X': '<unknown>,
-#    }
-#
-#    def __str__(self):
-#        ...
-#
-#
-#class FileDiff:
-#
-#    _raw = None
-#    _text = None
-#    _parts = None
-#
-#    def __init__(self, filename, status, diffstat=None, parts=None):
-#        self.filename = filename
-#        self.status = status
-#        self.diffstat = FileDiffStat.from_raw(diffstat)
-#        self.parts = FileDiffPart
-#
-#    def render(self, fmt=None):
-#        # --name-only
-#        # --name-status
-
-
-class FileDiffStat(namedtuple('FileDiffStat',
-                              'name oldname status additions deletions')):
-
-    STATUSES = {
-        'A': 'added',
-        'C': 'copied',
-        'D': 'deleted',
-        'M': 'modified',
-        'R': 'renamed',  # moved
-        'T': 'file type changed',
-        'U': 'unmerged',
-        #'X': '<unknown>,
-    }
-
-    @classmethod
-    def parse_all(cls, lines, fmt=None):
-        if isinstance(lines, str):
-            lines = lines.splitlines()
-        if not fmt:
-            fmt = '<default>'
-
-        if fmt == '<default>':
-            lines = iter(lines)
-            for count, line in enumerate(lines):
-                m = re.match(r'^ *(\d+) file', line)
-                if m:
-                    break
-                yield cls._parse(line, fmt)
-
-            else:
-                raise NotImplementedError
-            expected, = m.groups()
-            assert count == expected, (count, expected)
-            try:
-                next(lines)
-            except StopIteration:
-                pass
-
-        else:
-            for line in lines:
-                ...
-
-
-    @classmethod
-    def parse(cls, line, fmt=None):
-        if not fmt:
-            fmt = '<default>'
-        return cls._parse(line, fmt)
-
-    @classmethod
-    def _parse(cls, line, fmt):
-        oldname = status = additions = deletions = total = None
-
-        if fmt == '<default>':
-            name, _, changed = line.partition('|')
-            name = name.strip()
-            if ' => ' in name:
-                oldname, name = split(' => ')
-                assert oldname and name, (line,)
-            total, lineart = changed.split()
-            total = int(total)
-            if '+' in lineart:
-                if '-' in lineart:
-                    status = 'M'
-                else:
-                    # XXX or 'M'?
-                    status = 'A'
-            elif '-' in lineart:
-                # XXX or 'M'?
-                status = 'D'
-            else:
-                raise NotImplementedError((line,))
-            if oldname:
-                # XXX What about the old status?
-                status = 'R'
-        elif fmt == '--name-only':
-            name = line
-        elif fmt == '--name-status':
-            status, name = line.split()
-        else:
-            raise ValueError(f'unsupported fmt {fmt!r}')
-
-        self = cls(name, status, additions, deletions)
-        if total is not None:
-            self._total = total
-        return self
-
-    @property
-    def total(self):
-        try:
-            return self._total
-        except AttributeError:
-            if self.additions is None:
-                if self.deletions is None:
-                    self._total = None
-                else:
-                    # XXX Is this okay?
-                    self._total = self.additions
-            elif self.deletions is None:
-                # XXX Is this okay?
-                self._total = self.deletions
-            else:
-                self._total = self.additions + self.deletions
-            return self._total
-
-    def apply_to_dir_listing(self, names):
-        name = os.path.relpath(self.name, reldir)
-        if os.path.sep in name:
-            return
-        elif self.status == 'A':
-            assert name not in files, self
-            files.append(name)
-        elif self.status == 'R':
-            assert self.oldname, self
-            oldname = os.path.relpath(self.oldname, reldir)
-            if os.path.sep not in name:
-                assert name not in files, self
-                files.append(name)
-                if os.path.sep not in oldname:
-                    assert oldname in files, self
-                    files.remove(oldname)
-            else:
-                assert os.path.sep not in oldname, self
-                assert oldname in files, self
-                files.remove(oldname)
-        else:
-            assert name in files, self
-            if self.status == 'D':
-                files.remove(name)
-            elif self.status in 'MT':
-                pass
-            elif self.status == 'C':
-                raise NotImplementedError(self)
-            elif self.status == 'U':
-                raise NotImplementedError(self)
-            elif self.status == 'X':
-                raise NotImplementedError(self)
-            else:
-                raise NotImplementedError(self)
-
-
-#############################
 # repos
 
 class RevisionNotFoundError(KeyError):
@@ -420,6 +152,7 @@ class GitHubRepo:
             REVISION=revision,
             PATH='',
         )
+        # XXX Raise RevisionNotFoundError when appropriate.
         target, url, path = _utils.download_path(baseurl, path, target,
                                                  altpath=altpath,
                                                  makedirs=makedirs,
@@ -433,6 +166,7 @@ class GitHubRepo:
             REVISION=revision,
             PATH='',
         )
+        # XXX Raise RevisionNotFoundError when appropriate.
         return _utils.read_path(baseurl, path, encoding=encoding)
 
 
@@ -506,31 +240,7 @@ class Repo:
         return resolved
 
     @classmethod
-    def _resolve_fallback_revisions(cls, ref, seen=None):
-        candidate = cls.FALLBACK_REVISIONS.get(ref)
-        if not candidate:
-            return []
-        if seen is None:
-            seen = set()
-        elif candidate in seen:
-            return []
-        fallbacks = []
-
-        candidates = [candidate]
-        while candidates:
-            candidate = candidates.pop(0)
-            fallbacks.append(candidate)
-
-            candidate = cls.FALLBACK_REVISIONS.get(candidate)
-            if candidate in seen:
-                continue
-            seen.add(candidate)
-            candidates.append(candidate)
-
-        return fallbacks
-
-    @classmethod
-    def _resolve_revisions(cls, ref, fallback=True):
+    def _resolve_revisions(cls, ref):
         if not ref:
             ref = cls.REVISION
 
@@ -539,42 +249,35 @@ class Repo:
         refs = [metarefs[-1]]
         seen = set(refs)
 
-        if fallback:
-            for metaref in metarefs:
-                fallbacks = cls._resolve_fallback_revisions(metaref, seen)
-                refs.extend(fallbacks)
-        assert len(refs) == len(seen), (refs, seen)
-
         return refs
 
     # "public" methods
 
-    def resolve_revision(self, ref, *, fallback=True):
-        _, res = self._try_resolved_revisions(ref, self._resolve_revision, fallback)
+    def resolve_revision(self, ref):
+        _, res = self._try_resolved_revisions(ref, self._resolve_revision)
         return res
 
     def download(self, path, target, revision=None, *,
                  altpath=None,
                  makedirs=True,
                  dummies=None,
-                 fallback=True,
                  ):
         def download(ref):
             return self._download(path, target, ref,
                                   altpath, makedirs, dummies)
-        _, res = self._try_resolved_revisions(revision, download, fallback)
+        _, res = self._try_resolved_revisions(revision, download)
         return res
 
-    def read(self, path, revision=None, *, encoding=None, fallback=True):
+    def read(self, path, revision=None, *, encoding=None):
         def read(ref):
             return self._read(path, ref, encoding)
-        _, res = self._try_resolved_revisions(revision, read, fallback)
+        _, res = self._try_resolved_revisions(revision, read)
         return res
 
-    def listdir(self, path=None, revision=None, *, fallback=True):
+    def listdir(self, path=None, revision=None):
         def listdir(ref):
             return self._listdir(path, ref)
-        _, res = self._try_resolved_revisions(revision, listdir, fallback)
+        _, res = self._try_resolved_revisions(revision, listdir)
         return res
 
     # implemented by subclasses
@@ -594,9 +297,9 @@ class Repo:
 
     # internal implementation
 
-    def _try_resolved_revisions(self, revision, task, fallback):
+    def _try_resolved_revisions(self, revision, task):
         firstexc = None
-        revisions = self._resolve_revisions(revision, fallback)
+        revisions = self._resolve_revisions(revision)
         while revisions:
             ref = revisions.pop(0)
             try:
@@ -760,6 +463,7 @@ class LocalRepo(Repo):
     def _download(self, path, target, revision,
                   altpath=None, makedirs=True, dummies=None):
         filename = self._resolve_filename(path)
+        # XXX Raise RevisionNotFoundError when appropriate.
         if revision == '<STAGED>':
             # Use HEAD with staged files included.
             raise NotImplementedError
@@ -771,6 +475,7 @@ class LocalRepo(Repo):
 
     def _read(self, path, revision=None, encoding=None):
         filename = self._resolve_filename(path)
+        # XXX Raise RevisionNotFoundError when appropriate.
         if revision == '<STAGED>':
             # Read directly from the filesystem if no unstaged changes.
             # Otherwise read the staged file, if staged, else HEAD.
@@ -790,6 +495,7 @@ class LocalRepo(Repo):
             reldir = '.'
             dirname = self.root
 
+        # XXX Raise RevisionNotFoundError when appropriate.
         if revision is LOCAL or revision is STAGED:
             text = self._run_text(
 #                'ls-tree', '--name-only', '--full-name', HEAD, reldir)
@@ -869,15 +575,3 @@ class LocalRepo(Repo):
             self.root,
             *_iter_relpath(path),
         )
-
-#    def _get_filename(self, path, revision, force=False):
-#        # XXX
-#        raise NotImplementedError
-#        filename = self._resolve_filename(path)
-#        if force:
-#            return filename
-#        elif revision is LOCAL:
-#            return filename
-#        elif revision is STAGED:
-#            if 
-#            ...

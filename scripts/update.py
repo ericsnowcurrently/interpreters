@@ -35,9 +35,6 @@ ROOT = os.path.abspath(
 SRC_DIR = os.path.join(ROOT, 'src')
 DOWNLOADS_DIR = os.path.join(ROOT, 'src/orig')
 METADATA_FILE = os.path.join(ROOT, 'METADATA')
-REPO = os.path.join(ROOT, 'build', 'cpython')
-
-REPO_URL = 'https://github.com/python/cpython'
 
 SRC_PY = [
     '/Lib/interpreters/__init__.py',
@@ -49,9 +46,11 @@ SRC_C = [
     '/Modules/_interpqueuesmodule.c',
     '/Modules/_interpchannelsmodule.c',
 #    '/Modules/_interpreters_common.h',
+
     '/Python/crossinterp.c',
 #    '/Python/crossinterp_data_lookup.h',
 #    '/Python/crossinterp_exceptions.h',
+
     '/Python/thread.c',
     '/Objects/abstract.c',
 ]
@@ -87,21 +86,6 @@ INCLUDES_INDIRECT = [
     '/Include/internal/pycore_critical_section.h',
     '/Include/internal/pycore_object.h',
 ]
-
-#PUBLIC_NOT_USED = set([
-#    '/Include/cpython/optimizer.h',
-#    '/Include/cpython/tracemalloc.h',
-#    '/Include/pystats.h',
-#])
-#PUBLIC_USED = {
-#    '/Include/object.h': ['/Include/pyatomic.h'],
-#    '/Include/internal/pycore_ceval.h': ['/Include/pyatomic.h'],
-#    '/Include/internal/pycore_interp.h': ['/Include/pyatomic.h'],
-#    '/Include/internal/pycore_lock.h': ['/Include/pyatomic.h'],
-#    '/Include/internal/pycore_object.h': ['/Include/pyatomic.h'],
-#    '/Include/internal/pycore_parking_lot.h': ['/Include/pyatomic.h'],
-#    '/Include/internal/pycore_runtime.h': ['/Include/pyatomic.h'],
-#}
 
 USE_SHIM = set([
     # incompatible, new, excessive baggage, etc.
@@ -140,11 +124,6 @@ def _resolve_directories(downdir=None, srcdir=None):
     return downdir, srcdir, incldir
 
 
-def clear_all(downdir=None, srcdir=None):
-    downdir, srcdir, incldir = _resolve_directories(downdir, srcdir)
-    return _clear_all(downdir, srcdir, incldir)
-
-
 def _clear_all(downdir, srcdir, incldir):
     srcglob = os.path.join(srcdir, '*.c')
 
@@ -160,14 +139,6 @@ def _clear_all(downdir, srcdir, incldir):
 
     debug(f'clearing ./{os.path.relpath(srcglob)}')
     _utils.rm_files(srcglob)
-
-
-def download_source(repo, revision, downdir=None, knowndirs=None):
-    if knowndirs is None:
-        knowndirs = set()
-    repo = _cpython.resolve_repo(repo)
-    downdir, *_ = _resolve_directories(downdir)
-    return _download_source(repo, revision, downdir, knowndirs)
 
 
 def _download_source(repo, revision, downdir, knowndirs):
@@ -200,37 +171,6 @@ def _download_source(repo, revision, downdir, knowndirs):
     assert not old or sorted(old) == sorted(PRE_PEP_734), (maybe_old, sorted(old), sorted(PRE_PEP_734))
 
     return files
-
-
-#def _analyze_dependencies(filenames, download=None):
-#    deps = {}
-#    includes = []
-#    for filename in filenames:
-#        debug(f'+ ./{os.path.relpath(filename)}')
-#        deps[filename] = []
-#        with open(filename) as infile:
-#            for dep in _cpython.analyze_dependencies(infile, filename,
-#                                                     recurse=download):
-#                deps[filename].append(dep)
-#                if dep.kind == 'include-user':
-#                    if dep.name not in includes:
-#                        includes.append(dep.name)
-#    return deps, includes
-
-
-def _list_public_headers(repo, revision=None):
-    includes = _cpython.list_public_headers(repo, revision)
-    other = _cpython.list_public_headers(repo, '3.12')
-    new = set(includes) - set(other)
-    return includes, new
-
-
-def download_includes(repo, revision, cfiles, downdir=None, knowndirs=None):
-    if knowndirs is None:
-        knowndirs = set()
-    repo = _cpython.resolve_repo(repo)
-    downdir, *_ = _resolve_directories(downdir)
-    return _download_includes(repo, revision, cfiles, downdir, knowdirs)
 
 
 def _download_includes(repo, revision, cfiles, downdir, knowndirs):
@@ -270,120 +210,23 @@ def _download_includes(repo, revision, cfiles, downdir, knowndirs):
     return files
 
 
-#def _download_includes(repo, revision, cfiles, downdir, knowndirs):
-#    debug('analyzing public headers (Python.h)')
-#    public, new = _list_public_headers(repo, revision)
-#    if new:
-#        for path in sorted(new):
-#            status = ' (ignored)' if path in PUBLIC_NOT_USED else ''
-#            warn(f' public header not in 3.12: {path}{status}')
-#        debug('')
-#
-#    files = {}
-#
-#    _download = _cpython.get_downloader(repo, revision, downdir,
-#                                        files=files,
-#                                        knowndirs=knowndirs)
-#
-#    def download(path, parent=None):
-#        target = _download(path)
-#        copy = 'copy'
-#        if path in USE_SHIM:
-#            copy = 'dummy'
-#        elif parent:
-#            _, parent_copy = files[parent]
-#            if parent_copy != 'copy':
-#                copy = 'ignore'
-#        files[path] = (target, copy)
-#        return target
-#
-#    seen = {}
-#
-#    debug('.h files (new):')
-#    for path in sorted(new):
-#        if path not in PUBLIC_NOT_USED:
-#            target = download(path)
-#            seen[path] = target
-#
-#    debug('')
-#    debug('.h files (direct):')
-#    for filename in cfiles:
-#        for path in _cpython.iter_includes(filename, seen):
-#            if path == '/Include/Python.h':
-#                seen.pop(path)
-#                continue
-#            if '/' not in path.lstrip('/Include/') and path not in new:
-#                seen.pop(path)
-#                continue
-#            assert path.startswith('/Include/internal/'), repr(path)
-#            target = download(path)
-#            seen[path] = target
-#
-#    # For now, don't download the indirect includes.
-#    return files
-#
-#    debug('')
-#    debug('.h files (indirect):')
-#    remainder = sorted(seen.items())
-#    while remainder:
-##        import pprint; pprint.pprint(remainder, indent=2, width=200)
-#        path, filename = remainder.pop(0)
-#        assert filename, repr(path)
-#        for indirect in _cpython.iter_includes(filename):
-#            if indirect == '/Include/Python.h':
-#                continue
-#            if '/' not in indirect.lstrip('/Include/') and indirect not in new:
-#                continue
-#            if indirect in seen:
-#                assert indirect in files, (indirect, filename)
-#                target, copy = files[indirect]
-#                if indirect in USE_SHIM:
-#                    assert copy == 'dummy'
-#                else:
-#                    assert copy != 'dummy'
-#            else:
-#                target = download(indirect, parent=path)
-#                seen[indirect] = target
-#                remainder.append((indirect, target))
-#
-#        for indirect in PUBLIC_USED.get(path) or ():
-#            if indirect in seen:
-#                target, copy = files[indirect]
-#                if indirect in USE_SHIM:
-#                    assert copy == 'dummy'
-#                else:
-#                    assert copy != 'dummy'
-#            else:
-#                target = download(indirect, parent=path)
-#                seen[indirect] = target
-#                remainder.append((indirect, target))
-#
-#    return files
-
-
-def _resolve_src_target(srcdir, incldir, path):
-    assert path.startswith('/'), repr(path)
-    basename = path.split('/')[-1]
-    if path.endswith('.py'):
-        assert '/interpreters/' in path, repr(path)
-        reltarget = f'interpreters/{basename}'
-    elif path.endswith('.c'):
-        reltarget = basename
-    elif path.startswith('/Include/'):
-        return os.path.join(incldir, basename)
-    else:
-        raise NotImplementedError(repr(path))
-    return os.path.join(srcdir, reltarget)
-
-
-def apply_downloads(files, srcdir=None):
-    _, srcdir, incldir = _resolve_directories(srcdir=srcdir)
-    return _apply_downloads(files, srcdir, incldir)
-
-
 def _apply_downloads(files, srcdir, incldir):
+    def resolve_src_target(path):
+        assert path.startswith('/'), repr(path)
+        basename = path.split('/')[-1]
+        if path.endswith('.py'):
+            assert '/interpreters/' in path, repr(path)
+            reltarget = f'interpreters/{basename}'
+        elif path.endswith('.c'):
+            reltarget = basename
+        elif path.startswith('/Include/'):
+            return os.path.join(incldir, basename)
+        else:
+            raise NotImplementedError(repr(path))
+        return os.path.join(srcdir, reltarget)
+
     for path, (downloaded, copy) in files.items():
-        target = _resolve_src_target(srcdir, incldir, path)
+        target = resolve_src_target(path)
         if copy == 'copy':
             if os.path.exists(target):
                 # /Modules/_interpreters_common.h
@@ -403,19 +246,18 @@ def _apply_downloads(files, srcdir, incldir):
         yield path, target, downloaded
 
 
-def _fix_file(filename, fix):
-    with open(filename, 'r') as infile:
-        text = infile.read()
-    with open(f'{filename}.orig', 'w') as orig:
-        orig.write(text)
-    text = fix(text)
-    if text is None:
-        raise Exception(f'"fix" func {fix} returned None, expected str')
-    with open(filename, 'w') as outfile:
-        outfile.write(text)
+class FileFixer:
 
+    _FIXES = _utils.FileFixes()
 
-def fix_all(files):
+    def register(filename, *, _fixes=_FIXES):
+        deco = _fixes.register(filename)
+        def decorator(func):
+            func = deco(func)
+            return staticmethod(func)
+        return decorator
+
+    @register('_interpretersmodule.c')
     def fix__interpretersmodule_c(text):
         text = text.replace(
             '#define MODULE_NAME _xxsubinterpreters',
@@ -425,10 +267,13 @@ def fix_all(files):
             '_PyInterpreterState_LookUpID(',
             '_PyInterpreterState_LookUpIDFixed(',
         )
-        text = text.replace(
+
+        before, _, after = text.partition('module_clear(PyObject *mod)')
+        before += 'module_clear(PyObject *mod)'
+        text = before + after.replace(
             'module_state *state = get_module_state(mod);',
             textwrap.dedent('''\
-            module_state *state = get_module_state(mod);',
+            module_state *state = get_module_state(mod);
 
             PyInterpreterState *interp = PyInterpreterState_Get();
             PyStatus status = _PyXI_InitTypes(interp);
@@ -436,18 +281,28 @@ def fix_all(files):
                 _PyErr_SetFromPyStatus(status);
                 return -1;
             }
-            ''').rstrip(),
+            '''[4:]).rstrip(),
         )
+
         text = text.replace(
             'clear_module_state(state);',
             textwrap.dedent('''\
             clear_module_state(state);
             _PyXI_FiniTypes(PyInterpreterState_Get());
-            ''').rstrip(),
-            count=1,
+            '''[4:]).rstrip(),
+            1,  # count
         )
         return text
 
+    @register('_interpqueuesmodule.c')
+    def fix__interpqueuesmodule_c(text):
+        text = text.replace(
+            '#define MODULE_NAME _xxinterpqueues',
+            '#define MODULE_NAME _interpqueues',
+        )
+        return text
+
+    @register('_interpchannelsmodule.c')
     def fix__interpchannelsmodule_c(text):
         text = text.replace(
             '#define MODULE_NAME _xxinterpchannels',
@@ -455,13 +310,7 @@ def fix_all(files):
         )
         return text
 
-    def fix__interpchannelsmodule_c(text):
-        text = text.replace(
-            '#define MODULE_NAME _xxinterpchannels',
-            '#define MODULE_NAME _interpchannels',
-        )
-        return text
-
+    @register('crossinterp.c')
     def fix_crossinterp_c(text):
         text = text.replace(
             '_PyInterpreterState_LookUpID(',
@@ -469,6 +318,7 @@ def fix_all(files):
         )
         return text
 
+    @register('pycore_crossinterp.h')
     def fix_pycore_crossinterp_h(text):
         # s/^struct _xid {/struct _xid_new {/
         text = text.replace('struct _xid {', 'struct _xid_new {')
@@ -477,16 +327,16 @@ def fix_all(files):
             'PyAPI_DATA(PyObject *) PyExc_InterpreterError;',
             textwrap.dedent('''\
             extern PyObject * _get_exctype(PyInterpreterState *, const char *);
-            #define GET_EXC_TYPE(TYPE) \
+            #define GET_EXC_TYPE(TYPE) \\
                 _get_exctype(PyInterpreterState_Get(), #TYPE)
-            #define PyExc_InterpreterError \
+            #define PyExc_InterpreterError \\
                 GET_EXC_TYPE(PyExc_InterpreterError)
             ''').rstrip(),
         )
         text = text.replace(
             'PyAPI_DATA(PyObject *) PyExc_InterpreterNotFoundError;',
             textwrap.dedent('''\
-            #define PyExc_InterpreterNotFoundError \
+            #define PyExc_InterpreterNotFoundError \\
                 GET_EXC_TYPE(PyExc_InterpreterNotFoundError)
 
             PyInterpreterState * _PyInterpreterState_LookUpIDFixed(int64_t);
@@ -494,37 +344,26 @@ def fix_all(files):
         )
         return text
 
-    def fix_typeobject_h(text):
+    @register('pycore_typeobject.h')
+    def fix_pycore_typeobject_h(text):
         text = text.replace(
             'PyAPI_FUNC(PyObject *) _PyType_GetModuleName(PyTypeObject *);',
-            ('#define _PyType_GetModuleName(cls) '
-             '    PyObject_GetAttrString((PyObject *)cls, "__module__")'),
+            textwrap.dedent('''\
+            #define _PyType_GetModuleName(cls) \\
+                PyObject_GetAttrString((PyObject *)cls, "__module__")
+            ''').rstrip(),
         )
         return text
 
-    for filename in files:
-        basename = os.path.basename(filename)
-        if basename == '_interpreters.c':
-            fix = fix__interpretersmodule_c
-        elif basename == '_interpqueues.c':
-            fix = fix__interpqueuesmodule_c
-        elif basename == '_interpchannels.c':
-            fix = fix__interpchannelsmodule_c
-        elif basename == 'crossinterp.c':
-            fix = fix_crossinterp_c
-        elif basename == 'pycore_crossinterp.h':
-            fix = fix_pycore_crossinterp_h
-        elif basename == 'pycore_typeobject.h':
-            fix = fix_typeobject_h
-        else:
-            continue
-        debug(f'+ fixing ./{os.path.relpath(filename)}')
-        _fix_file(filename, fix)
+    del register
+
+    def run(self, *files, backup='.orig'):
+        for filename in files:
+            self._FIXES.apply_to_file(filename, backup)
 
 
 def write_metadata(repo, revision, files, branch=None, filename=None):
-    if not repo:
-        repo = REPO_URL
+    repo = _cpython.resolve_repo(repo)
     timestamp = datetime.datetime.utcnow()
     text = textwrap.dedent(f"""
         [DEFAULT]
@@ -574,8 +413,9 @@ def main(revision=None, repo=None):
         revision = 'main'
     repo = _cpython.resolve_repo(repo)
 
-    revision, branch = repo.resolve_revision(revision, fallback=False)
+    revision, branch = repo.resolve_revision(revision)
 
+    fixer = FileFixer()
     downdir, srcdir, incldir = _resolve_directories()
     knowndirs = set()
     files = {}
@@ -599,10 +439,6 @@ def main(revision=None, repo=None):
     files = _download_source(repo, revision, downdir, knowndirs)
     cfiles = [f for f, _ in files.values() if f.endswith('.c')]
     debug()
-
-#    debug('analyzing C dependencies')
-#    deps, includes = _analyze_dependencies(cfiles)
-#    debug()
 
     inclfiles = _download_includes(repo, revision, cfiles, downdir, knowndirs)
     files.update(inclfiles)
@@ -636,7 +472,7 @@ def main(revision=None, repo=None):
     ###############
     section('applying fixes')
 
-    fix_all(copied)
+    fixer.run(*copied)
     debug('...done')
 
     ###############
