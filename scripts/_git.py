@@ -126,6 +126,15 @@ class GitHubRepo:
         self.org = org
         self.name = name
 
+    def __repr__(self):
+        return f'{type(self).__name__}(org={self.org}, name={self.name})'
+
+    def __str__(self):
+        try:
+            return self._url
+        except AttributeError:
+            return f'https://github.com/{self.org}/{self.name}'
+
     def get_commit(self, ref):
         # https://docs.github.com/en/rest/commits/commits?apiVersion=2022-11-28#get-a-commit
         url = self.COMMIT.format(ORG=self.org, REPO=self.name, REF=ref)
@@ -369,6 +378,12 @@ class RemoteRepo(Repo):
     def __init__(self, url):
         self.url = url
 
+    def __repr__(self):
+        return f'{type(self).__name__}(url={self.url})'
+
+    def __str__(self):
+        return self.url
+
     # Repo method implementations
 
     def _resolve_revision(self, ref):
@@ -452,6 +467,12 @@ class LocalRepo(Repo):
 
     def __init__(self, root):
         self.root = root
+
+    def __repr__(self):
+        return f'{type(self).__name__}(root={self.root})'
+
+    def __str__(self):
+        return self.root
 
     # Repo method implementations
 
