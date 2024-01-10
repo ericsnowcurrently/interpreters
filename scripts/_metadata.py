@@ -1,6 +1,5 @@
 from collections import namedtuple
 import logging
-#import os
 import os.path
 import textwrap
 
@@ -53,26 +52,39 @@ class Metadata(namedtuple('Metadata', 'repourl revision branch files')):
         )
         return self
 
-    def render(self, fmt=None):
-        if fmt is None:
-            fmt = CSVFormat()
-        else:
-            fmt = normalize_format(fmt)
-        yield from fmt.render(self)
-
-    def write(self, filename=None, fmt=None, timestamp=None):
+    def write(self, filename=None, timestamp=None):
         if not filename:
             filename = METADATA_FILE
         elif filename.endswith(('/', os.path.sep)):
             filename += METADATA
         timestamp = _utils.normalize_timestamp(timestamp)
 
-        lines = iter(self.render(fmt))
+        text = textwrap.dedent(f"""
+            [DEFAULT]
+            timestamp = {timestamp:%Y-%m-%d %H:%M:%S}
+
+            [upstream]
+            repo = {self.repourl}
+            revision = {self.revision}
+            branch = {self.branch or ''}
+
+            [files]
+            downloaded = {{}}
+            """)
+
+        # downloads
+        lines = ['{']
+        for path, target in sorted(self.files.downloaded):
+            reltarget = os.path.relpath(target, ROOT)
+            lines.append(f'{INDENT}{path:45} -> {reltarget}')
+        lines.append(INDENT + '}')
+        text = text.format(os.linesep.join(lines))
+
+        # write the file
+        logger.debug(f'writing metadata to {filename}')
         with open(filename, 'w', encoding='utf-8') as outfile:
-            outfile.write(next(lines))
-            for line in lines:
-                outfile.write('\n')
-                outfile.write(line)
+            outfile.write(text)
+        return filename
 
 
 class MetadataFiles(namedtuple('MetadataFiles', 'downloaded')):
@@ -117,192 +129,3 @@ class MetadataFiles(namedtuple('MetadataFiles', 'downloaded')):
             downloaded=downloaded,
         )
         return self
-
-
-#######################################
-# formats
-
-def normalize_format(fmt):
-    if fmt is None:
-        raise ValueError('missing fmt')
-    elif isinstance(fmt, Format):
-        return fmt
-    elif isinstance(fmt, str):
-        raise NotImplementedError(fmt)
-    else:
-        raise TypeError(f'unsupported fmt {fmt!r}')
-
-
-class Format:
-    pass
-
-
-class CSVFormat(Format, namedtuple('CSVFormat', 'files indent timestamp')):
-
-    TIMESTAMP = '%Y-%m-%d %H:%M:%S'
-
-    TEMPLATE = textwrap.dedent("""
-        [DEFAULT]
-        timestamp = {{timestamp:{}}}
-
-        [upstream]
-        repo = {{repo}}
-        revision = {{revision}}
-        branch = {{branch}}
-
-        [files]
-        downloaded = {{downloaded}}
-        """)
-
-    def __new__(cls, files=None, indent=INDENT, timestamp=TIMESTAMP):
-        indent = _utils.normalize_indent(indent)
-        if files is None:
-            files = FilesFormat(indent=indent)
-        else:
-            files = FilesFormat.from_raw(files)
-        if not timestamp:
-            timestamp = cls.TIMESTAMP
-        elif not isinstance(timestamp, str):
-            raise TypeError(f'unsupported timestamp format {timestamp!r}')
-
-        self = super().__new__(cls, files, indent, timestamp)
-        self._template = cls.TEMPLATE.format(timestamp)
-        return self
-
-    def render(self, metadata, downdir=None, filesfmt=None, timestamp=None):
-        files = self.files.render_as_dict(metadata.files, filesfmt,
-                                          downdir=downdir)
-        timestamp = _utils.normalize_timestamp(timestamp)
-        text = self._template.format(
-            timestamp=timestamp,
-            repo=metadata.repourl,
-            revision=metadata.revision,
-            branch=metadata.branch or '',
-            downloaded='',
-        )
-
-        lines = iter(text.splitlines())
-        for line in lines:
-            yield line
-            if line == '[files]':
-                break
-
-        # render the files section
-        for line in lines:
-            key, sep, after = line.partition(' = ')
-            assert sep and not after, (line,)
-            fileslines = iter(files.pop(key))
-            first = next(fileslines)
-            yield line + first
-            # XXX Apply indents here instead of in FilesFormat?
-            for line in fileslines:
-                yield line
-        assert not files, files
-
-
-class FilesFormat(namedtuple('FilesFormat', 'fmt indent downfile')):
-
-    FORMATS = {
-        'dict-raw',
-    }
-    DOWNFILE_FORMATS = {
-        'dict-raw': 'directed-raw',
-    }
-
-    def __new__(cls, fmt='dict-raw', indent=None, downfile=None):
-        if not fmt:
-            fmt = 'dict-raw'
-        elif fmt not in cls.FORMATS:
-            raise ValuError(f'unsupported fmt {fmt!r}')
-        indent = _utils.normalize_indent(indent)
-        if downfile is None:
-            downfile = DownfileFormat(
-                fmt=cls.DOWNFILE_FORMATS.get(fmt),
-                indent=indent,
-            )
-
-        self = super().__new__(
-            cls,
-            fmt=fmt,
-            indent=indent,
-            downfile=downfile,
-        )
-        return self
-
-    def render(self, files, downroot=None, depth=0):
-        files = MetadataFiles.from_raw(files)
-
-    def render_as_dict(self, files, fmt='dict-raw', *,
-                       downdir=None,
-                       depth=0,
-                       indent=INDENT,
-                       ):
-        if not fmt:
-            fmt = 'dict-raw'
-        if downdir is not None:
-            downroot = downdir
-            downdir = os.path.relpath(downdir, ROOT)
-        else:
-            downroot = ROOT
-
-        rendered = dict(
-            downloaded=None,
-        )
-
-        # downloaded
-        lines = []
-        if fmt == 'dict-raw':
-            lines.append('{')
-            for path, target in sorted(files.downloaded):
-                lines.append(
-                    self.downfile.format(path, target, downroot, depth+1),
-                )
-            lines.append((self.indent * depth) + '}')
-        rendered['downloaded'] = lines
-
-        return rendered
-
-
-class DownfileFormat(namedtuple('DownfileFormat', 'fmt indent relroot pathwidth')):
-
-    FORMATS = {
-        'directed-raw',
-    }
-    FORMAT = 'directed-raw'
-    PATH_WIDTH = 45
-
-    def __new__(cls, fmt=FORMAT, indent=INDENT, relroot=None, pathwidth=PATH_WIDTH):
-        if not fmt:
-            fmt = 'directed-raw'
-        elif fmt not in cls.FORMATS:
-            raise ValuError(f'unsupported fmt {fmt!r}')
-        indent = _utils.normalize_indent(indent)
-        if relroot:
-            if not isinstance(relroot, str):
-                raise TypeError(f'unsupported relroot {relroot!r}')
-        if pathwidth is None:
-            pass
-        elif not isinstance(pathwidth, int):
-            raise TypeError(f'unsupported pathwidth {pathwidth!r}')
-        elif pathwidth <= 0:
-            pathwidth = None
-        self = super().__new__(
-            cls,
-            fmt=fmt,
-            indent=indent,
-            relroot=relroot or ROOT,
-            pathwidth=pathwidth or cls.PATHWIDTH,
-        )
-        return self
-
-    def format(self, path, target, relroot=True, depth=0):
-        _utils.validate_path(path)
-        if relroot is True:
-            relroot = self.relroot
-        relfile = _utils.normalize_filename(target, relroot or None)
-        depth = _utils.normalize_depth(depth)
-
-        if self.fmt == 'directed-raw':
-            return f'{depth * self.indent}{path:{self.pathwidth}} -> {relfile}'
-        else:
-            raise NotImplementedError(repr(fmt))
