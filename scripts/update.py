@@ -111,6 +111,15 @@ USE_SHIM = set([
     '/Include/internal/pycore_critical_section.h',
     '/Include/internal/pycore_object.h',
 ])
+PENDING_UPSTREAM = set([
+    '/Modules/_interpreters_common.h',
+    '/Python/crossinterp_data_lookup.h',
+    '/Python/crossinterp_exceptions.h',
+])
+INTERNAL = set([
+    'shim-compatible-includes.h',
+    'shim-new-stuff.h',
+])
 
 
 def _resolve_directories(downdir=None, srcdir=None):
@@ -127,18 +136,21 @@ def _resolve_directories(downdir=None, srcdir=None):
 def _clear_all(downdir, srcdir, incldir):
     srcglob = os.path.join(srcdir, '*.c')
 
-    pkgroot = os.path.join(srcdir, 'interpreters')
-    debug(f'clearing ./{os.path.relpath(pkgroot)}/*')
-    _utils.clear_directory(pkgroot)
+#    pkgroot = os.path.join(srcdir, 'interpreters')
+#    debug(f'clearing ./{os.path.relpath(pkgroot)}/*')
+#    _utils.clear_directory(pkgroot)
 
     debug(f'clearing ./{os.path.relpath(downdir)}/*')
     _utils.clear_directory(downdir)
 
-    debug(f'clearing ./{os.path.relpath(incldir)}/*')
-    _utils.clear_directory(incldir)
+#    debug(f'clearing ./{os.path.relpath(incldir)}/*')
+#    _utils.clear_directory(incldir)
 
-    debug(f'clearing ./{os.path.relpath(srcglob)}')
-    _utils.rm_files(srcglob)
+#    debug(f'clearing ./{os.path.relpath(srcglob)}')
+#    _utils.rm_files(srcglob)
+
+    debug(f'clearing ./{os.path.relpath(srcdir)}/**/*.orig')
+    _utils.rm_files(os.path.join(srcdir, '**', '*.orig'))
 
 
 def _download_source(repo, revision, downdir, knowndirs):
@@ -210,7 +222,7 @@ def _download_includes(repo, revision, cfiles, downdir, knowndirs):
     return files
 
 
-def _apply_downloads(files, srcdir, incldir):
+def _resolve_applied_downloads(files, srcdir, incldir):
     def resolve_src_target(path):
         assert path.startswith('/'), repr(path)
         basename = path.split('/')[-1]
@@ -228,15 +240,9 @@ def _apply_downloads(files, srcdir, incldir):
     for path, (downloaded, copy) in files.items():
         target = resolve_src_target(path)
         if copy == 'copy':
-            if os.path.exists(target):
-                # /Modules/_interpreters_common.h
-                # /Python/crossinterp_data_lookup.h
-                downloaded = f'!{downloaded}'
-            else:
-                _utils.copy_file(downloaded, target)
+            pass
         elif copy == 'dummy':
             assert path in USE_SHIM, repr(path)
-            _utils.touch(target)
             downloaded = None
         elif copy == 'ignore':
             target = None
@@ -246,18 +252,71 @@ def _apply_downloads(files, srcdir, incldir):
         yield path, target, downloaded
 
 
+def apply_download(target, downloaded, fixer, backups):
+    if os.path.exists(target):
+        with open(target) as infile:
+            existing = infile.read()
+    else:
+        existing = None
+
+    reltarget = os.path.relpath(target)
+    if downloaded is None:
+        if existing is not None:
+            if not existing:
+                debug(f' ./{reltarget:40}  <- dummy')
+            else:
+                debug(f' ./{reltarget:40}  (cleared)  <- dummy')
+                os.unlink(target)
+                _utils.touch(target)
+        else:
+            debug(f' ./{reltarget:40}  (new)  <- dummy')
+            _utils.touch(target)
+        return
+
+    if existing is None:
+        debug(f' ./{reltarget:40}  (new)  <- ./{os.path.relpath(downloaded)}')
+        apply = fixer.match(downloaded)
+        if apply is None:
+            _utils.copy_file(downloaded, target)
+            text = None
+        else:
+            debug(f'  + fixing ./{reltarget}')
+            with open(downloaded) as infile:
+                text = infile.read()
+            text = apply(text)
+    else:
+        debug(f' ./{reltarget:40}  <- ./{os.path.relpath(downloaded)}')
+        with open(downloaded) as infile:
+            text = infile.read()
+        apply = fixer.match(downloaded)
+        if apply is not None:
+            debug(f'  + fixing ./{reltarget}')
+            text = apply(text)
+        if text != existing:
+            debug(f'  + backing up ./{reltarget}')
+            with open(f'{target}.orig', 'w') as orig:
+                orig.write(existing)
+            backups.append((reltarget, f'{reltarget}.orig'))
+    if text is not None:
+        with open(target, 'w') as outfile:
+            outfile.write(text)
+
+
 class FileFixer:
 
-    _FIXES = _utils.FileFixes()
+    _FIXES = {}
 
-    def register(filename, *, _fixes=_FIXES):
-        deco = _fixes.register(filename)
+    def register(basename, *alts, _fixes=_FIXES):
         def decorator(func):
-            func = deco(func)
+            assert basename not in _fixes, (basename, _fixes)
+            _fixes[basename] = func
+            for alt in alts:
+                assert alt not in _fixes, (alt, _fixes)
+                _fixes[alt] = func
             return staticmethod(func)
         return decorator
 
-    @register('_interpretersmodule.c')
+    @register('_interpretersmodule.c', '_xxsubinterpretersmodule.c')
     def fix__interpretersmodule_c(text):
         text = text.replace(
             '#define MODULE_NAME _xxsubinterpreters',
@@ -294,7 +353,7 @@ class FileFixer:
         )
         return text
 
-    @register('_interpqueuesmodule.c')
+    @register('_interpqueuesmodule.c', '_xxinterpqueuesmodule.c')
     def fix__interpqueuesmodule_c(text):
         text = text.replace(
             '#define MODULE_NAME _xxinterpqueues',
@@ -302,7 +361,7 @@ class FileFixer:
         )
         return text
 
-    @register('_interpchannelsmodule.c')
+    @register('_interpchannelsmodule.c', '_xxinterpchannelsmodule.c')
     def fix__interpchannelsmodule_c(text):
         text = text.replace(
             '#define MODULE_NAME _xxinterpchannels',
@@ -357,9 +416,9 @@ class FileFixer:
 
     del register
 
-    def run(self, *files, backup='.orig'):
-        for filename in files:
-            self._FIXES.apply_to_file(filename, backup)
+    def match(self, filename):
+        basename = os.path.basename(filename)
+        return self._FIXES.get(basename)
 
 
 def write_metadata(repo, revision, files, branch=None, filename=None):
@@ -444,36 +503,43 @@ def main(revision=None, repo=None):
     files.update(inclfiles)
 
     ###############
-    section('copying downloaded files')
+    section('applying downloads')
 
-    copied = []
     ignored = []
-    for path, target, downloaded in _apply_downloads(files, srcdir, incldir):
+    backups = []
+    expected = set()
+    for path, target, downloaded in _resolve_applied_downloads(files, srcdir, incldir):
         if target is None:
             ignored.append(path)
             continue
-        reltarget = os.path.relpath(target)
-        if downloaded:
-            down_prefix = ''
-            if downloaded.startswith('!'):
-                down_prefix = '(ignored) '
-                downloaded = downloaded[1:]
-            else:
-                copied.append(target)
-            debug(f' ./{reltarget:40}  <- {down_prefix}./{os.path.relpath(downloaded)}')
-        else:
-            debug(f' ./{reltarget:40}  <- dummy')
+        expected.add(target)
+        apply_download(target, downloaded, fixer, backups)
+
+    if backups:
+        debug()
+        debug('backed up:')
+        for reltarget, relbackup in backups:
+            debug(f'  ./{reltarget:40}  ->  ./{relbackup}')
+
     if ignored:
         debug()
         debug('ignored:')
         for path in ignored:
             debug(f'  {path}')
 
-    ###############
-    section('applying fixes')
-
-    fixer.run(*copied)
-    debug('...done')
+    extra = {f'{srcdir}/{n}' for n in os.listdir(srcdir) if n.endswith(('.c', '.h'))}
+    pkgdir = os.path.join(srcdir, 'interpreters')
+    extra = {f'{pkgdir}/{n}' for n in os.listdir(pkgdir) if n.endswith('.py')}
+    extra.update(f'{incldir}/{n}' for n in os.listdir(incldir) if n.endswith('.h'))
+    extra -= set(expected)
+    extra -= PENDING_UPSTREAM
+    extra -= INTERNAL
+    if extra:
+        debug()
+        debug('removed (extra):')
+        for filename in sorted(extra):
+            debug(f'  {os.path.relpath(filename)}')
+            os.unlink(filename)
 
     ###############
     section('writing metadata')
