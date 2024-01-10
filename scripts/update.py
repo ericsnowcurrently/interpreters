@@ -1,6 +1,5 @@
 #! /usr/bin/env python3
 
-import datetime
 import logging
 import os
 import os.path
@@ -9,6 +8,7 @@ import textwrap
 
 import _utils
 import _cpython
+import _metadata
 
 
 VERBOSITY = 4  # logging.DEBUG
@@ -421,37 +421,6 @@ class FileFixer:
         return self._FIXES.get(basename)
 
 
-def write_metadata(repo, revision, files, branch=None, filename=None):
-    repo = _cpython.resolve_repo(repo)
-    timestamp = datetime.datetime.utcnow()
-    text = textwrap.dedent(f"""
-        [DEFAULT]
-        timestamp = {timestamp:%Y-%m-%d %H:%M:%S}
-
-        [upstream]
-        repo = {repo}
-        revision = {revision}
-        branch = {branch or ''}
-
-        [files]
-        downloaded = %s
-        """)
-
-    filelines = ['{']
-    indent = ' ' * 4
-    for relfile, (target, _) in sorted(files.items()):
-        reltarget = os.path.relpath(target, ROOT)
-        filelines.append(f'{indent}{relfile:45} -> {reltarget}')
-    filelines.append(indent + '}')
-    text = text % os.linesep.join(filelines)
-
-    if not filename:
-        filename = METADATA_FILE
-    with open(filename, 'w', encoding='utf-8') as outfile:
-        outfile.write(text)
-    return filename
-
-
 ##################################
 # the script
 
@@ -544,7 +513,7 @@ def main(revision=None, repo=None):
     ###############
     section('writing metadata')
 
-    write_metadata(repo, revision, files, branch)
+    _metadata.write(repo, revision, files, branch)
     debug('...done')
 
     ###############

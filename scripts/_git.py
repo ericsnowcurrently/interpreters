@@ -84,6 +84,23 @@ def parse_url(url):
     return url, localroot, github
 
 
+def validate_revision(revision):
+    if not revision:
+        raise ValueError('missing revision')
+    elif not isinstance(revision, str):
+        raise TypeError(f'expected str revision, got {revision!r}')
+    elif not re.match(r'^(?:[a-f0-9]{6,40}|[A-F0-9]{6,40})$', revision):
+        raise ValueError(f'unsupported revision {revision!r}')
+
+
+def validate_branch(name):
+    if not name:
+        raise ValueError('missing branch')
+    elif not isinstance(name, str):
+        raise TypeError(f'expected str branch, got {name!r}')
+    # XXX other checks?
+
+
 #############################
 # repos
 
