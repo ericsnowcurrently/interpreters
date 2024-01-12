@@ -66,6 +66,40 @@ function find-cpython-on-path() {
 
 
 #######################################
+# venv
+
+function ensure-clean-venv() {
+    local workdir=$1
+    local python=$2
+    local version=$3
+    local revision=$4
+    if [ -z "$workdir" ]; then
+        log "missing workdir arg"
+        return 1
+    fi
+    if [ -z "$python" ]; then
+        log "missing python arg"
+        return 1
+    fi
+
+	local venv_root="$workdir/venv_${version//./}"
+	if [ ! -e "$venv_root" ]; then
+	    (set -x
+	    "$python" -m venv "$venv_root"
+	    )
+	else
+	    (set -x
+	    "$python" -m venv --clear "$venv_root"
+	    )
+	fi
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+	echo $venv_root/bin/python$version
+}
+
+
+#######################################
 # local repo
 
 CPYTHON_UPSTREAM=https://github.com/python/cpython
