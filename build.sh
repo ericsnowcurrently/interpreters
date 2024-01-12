@@ -2,36 +2,39 @@
 
 PROJECT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-#UTCNOW="$(date --utc +'%Y%m%d-%H%M%S')"
-
 
 &>/dev/null pushd $PROJECT_DIR
 
 if [ -z "$PYTHON_312" ]; then
     source cpython_helpers.sh
 
-    exe_file=build/PYTHON_312
-    find-cpython 3.12 "$exe_file"
-    if [ -e "$exe_file" ]; then
-        PYTHON_312=$(cat "$exe_file")
-    fi
+    PYTHON_312=$(ensure-cpython 3.12 ./build)
     if [ -z "$PYTHON_312" ]; then
-        echo "falling back to a locally built python${version}..."
-        ensure-cpython-installed 3.12 build "$exe_file"
-        if [ -e "$exe_file" ]; then
-            PYTHON_312=$(cat "$exe_file")
-        fi
-        if [ -z "$PYTHON_312" ]; then
-            1>&2 echo 'Please set $PYTHON_312'
-            exit 1
-        fi
+        log 'Please set $PYTHON_312'
+        exit 1
+    fi
+else
+    if [ "$(basename "$PYTHON_312")" = "$PYTHON_312" ]; then
+        PYTHON_312=$(which "$PYTHON_312")
     fi
 fi
 
 
-echo "building extension modules with $("$PYTHON_312" -V)"
+echo "###################################################"
+echo "# building extension modules"
+echo "# (using $("$PYTHON_312" -V))"
+echo "# ($PYTHON_312)"
+echo "###################################################"
 venv_root=$PROJECT_DIR/build/venv_312
-#"$PYTHON_312" -m venv --clear $venv_root
+if [ ! -e "$venv_root" ]; then
+    (set -x
+    "$PYTHON_312" -m venv "$venv_root"
+    )
+else
+    (set -x
+    "$PYTHON_312" -m venv --clear "$venv_root"
+    )
+fi
 venv_exe=$venv_root/bin/python3.12
 
 set -e
