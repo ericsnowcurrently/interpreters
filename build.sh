@@ -6,14 +6,14 @@ workdir=$(realpath "$PROJECT_DIR/build")
 
 &>/dev/null pushd $PROJECT_DIR
 
+source cpython_helpers.sh
+
 PYTHON_312_REVISION=
 if [ -z "$PYTHON_312" ]; then
     echo "###################################################"
     echo "# \$PYTHON_312 not set; finding/building it"
     echo "###################################################"
     echo
-
-    source cpython_helpers.sh
 
     PYTHON_312=$(ensure-cpython 3.12 "$workdir")
     if [ -z "$PYTHON_312" ]; then
