@@ -531,45 +531,147 @@ function ensure-venv() {
     return 0
 }
 
-function ensure-clean-venv() {
-    local workdir=$1
-    local python=$2
-    local version=$3
-    local revision=$4
+function resolve-matching-venv() {
+    local python=$1
+    local version=$2
+    local revision=$3
+    if [ -n "$revision" ]; then
+        if ! match-git-revision -q --strict "$revision"; then
+            log "unsupported revision $revision"
+            return 1
+        fi
+    fi
+    local workdir=$4
+    local base="venv_${version//./}"
+    if [ -n "$workdir" ]; then
+        base="$workdir/$base"
+    fi
+    local relroot=
+
+    # a system-installed Python
+    local spython=$(echo "$python" | grep -P -q '^python(\d+?)?(?=\.exe$|$)')
+    if [ -n "$spython" ]; then
+        # The revision, if any, is ignored.
+        relroot="${base}_${spython}"
+    # a Python with an unknown revision
+    elif [ -z "$revision" ]; then
+        relroot=$base
+    # a Python with a known revision
+    else
+        relroot="${base}_${revision}"
+    fi
+
+    echo "$relroot"
+    return 0
+}
+
+function list-revision-venvs() {
+    local version=$1
+    local workdir=$2
+    local glob="venv_${version//./}_*"
+    if [ -n "$workdir" ]; then
+        glob="$workdir/$glob"
+    fi
+
+    for name in "$glob"; do
+        if match-git-revision -q --strict $name; then
+            echo $name
+        fi
+    done
+}
+
+function ensure-matching-venv() {
+    local python=$1
+    local version=$2
+    local revision=$3
+    local workdir=$4
     if [ -z "$workdir" ]; then
-        log "missing workdir arg"
+        log "missing workdir"
         return 1
     fi
-    if [ -z "$python" ]; then
-        log "missing python arg"
+    local activeroot=$(resolve-matching-venv "$python" $version "" "$workdir")
+
+    local venvroot=$(resolve-matching-venv "$python" $version $revision "$workdir")
+    if [ -z "$venvroot" ]; then
         return 1
+    elif [ -e "$venvroot" ]; then
+        if [ ! -d "$venvroot" ]; then
+            if [ "$venvroot" != "$activeroot" ]; then
+                log "venv root $venvroot must be a directory"
+                return 1
+            fi
+            (set -x
+            rm "$activeroot"
+            )
+        elif ! validate-venv "$venvroot"; then
+            (set -x
+            rm -r "$venvroot"
+            )
+        fi
     fi
 
-    version=$(resolve-cpython-version "$version" "$python")
-    if [ -z "$version" ]; then
-        return 1
-    fi
-
-    local venvroot="$workdir/venv_${version//./}"
-    local existing=false
-    if [ -d "$venvroot" ]; then
-        existing=true
-    fi
-
-    if ! ensure-venv "$venvroot" "$python" $version $revision; then
-        return 1
-    fi
-
-    if existing; then
+    if [ "$venvroot" = "$activeroot" ]; then
+        if [ -d "$venvroot" ]; then
+            local existing=$(resolve-venv-python "$venvroot")
+            if [ -n "$existing" -a $(resolve-venv-python "$activeroot") = "$existing" ]; then
+                echo $venvroot
+                return 0
+            fi
+            (set -x
+            rm -r "$venvroot"
+            )
+        fi
         (set -x
-        "$python" -m venv --clear "$venvroot"
+        "$python" -m venv "$venvroot"
         )
         if [ $? -ne 0 ]; then
             return 1
         fi
+    else
+        (set -x
+        "$python" -m venv "$venvroot"
+        )
+        if [ $? -ne 0 ]; then
+            return 1
+        fi
+
+        (set -x
+        ln -s "$venvroot" "$activeroot"
+        )
     fi
 
-    resolve-venv-python "$venvroot" $version
+    echo $venvroot
+    return 0
+}
+
+function clear-old-matching-venvs() {
+    local version=$1
+    local workdir=$2
+    local ignore=$3
+
+    log "clearing outdated venv dirs"
+    for venvroot in $(list-revision-venvs $version "$workdir"); do
+        if [ "$venvroot" != "$ignore" ]; then
+            (set -x
+            rm -r "$venvroot"
+            )
+        fi
+    done
+}
+
+function ensure-clean-venv() {
+    local python=$1
+    local version=$2
+    local revision=$3
+    local workdir=$4
+
+    local venv_root=$(ensure-matching-venv "$python" $version $revision "$workdir")
+    if [ -z "$venv_root" ]; then
+        return 1
+    elif ! clear-old-matching-venvs $version "$workdir" "$venv_root"; then
+        return 1
+    fi
+    resolve-venv-python "$venv_root"
 }
 
 
