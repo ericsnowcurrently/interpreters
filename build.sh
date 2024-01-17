@@ -68,7 +68,7 @@ DIST_WHEEL=$(ls dist/interpreters_3_12-*.whl)
 "$venv_exe" -c 'import _interpchannels'
 "$venv_exe" -c 'import _interpqueues'
 # XXX Do not bother uninstalling?
-"$venv_exe" -m pip uninstall interpreters_3_12
+"$venv_exe" -m pip uninstall --yes interpreters_3_12
 )
 
 &>/dev/null popd
