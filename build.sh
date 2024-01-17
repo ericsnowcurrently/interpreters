@@ -6,7 +6,13 @@ workdir=$(realpath "$PROJECT_DIR/build")
 
 &>/dev/null pushd $PROJECT_DIR
 
+PYTHON_312_REVISION=
 if [ -z "$PYTHON_312" ]; then
+    echo "###################################################"
+    echo "# \$PYTHON_312 not set; finding/building it"
+    echo "###################################################"
+    echo
+
     source cpython_helpers.sh
 
     PYTHON_312=$(ensure-cpython 3.12 "$workdir")
@@ -14,6 +20,7 @@ if [ -z "$PYTHON_312" ]; then
         log 'Please set $PYTHON_312'
         exit 1
     fi
+    PYTHON_312_REVISION=$(get-cpython-revision "$PYTHON_312")
 else
     if [ "$(basename "$PYTHON_312")" = "$PYTHON_312" ]; then
         PYTHON_312=$(which "$PYTHON_312")
@@ -25,7 +32,11 @@ echo
 echo "###################################################"
 echo "# building the extension modules"
 echo "# (using $("$PYTHON_312" -V))"
-echo "# ($PYTHON_312)"
+if [ -n "$PYTHON_312_REVISION" ]; then
+    echo "# ($PYTHON_312; revision $PYTHON_312_REVISION)"
+else
+    echo "# ($PYTHON_312; revision unknown)"
+fi
 echo "###################################################"
 echo
 
