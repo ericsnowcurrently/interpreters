@@ -25,6 +25,7 @@ function match-cpython-version() {
     local verstr=
     local quiet=false
     local bugfix=false
+    local arg=
     for arg in "$@"; do
         case "$arg" in
             "")
@@ -54,10 +55,10 @@ function match-cpython-version() {
 
     local found=
     if [ -z "$verstr" -o "$verstr" = '-' ]; then
-        log "+ grep -o -P $regex"
+        #log "+ grep -o -P '$regex'"
         found=$(grep -o -P "$regex")
     else
-        log "+ echo $verstr | grep -o -P $regex"
+        #log "+ echo $verstr | grep -o -P '$regex'"
         found=$(echo "$verstr" | grep -o -P "$regex")
     fi
     if [ $? -ne 0 ]; then
@@ -79,6 +80,9 @@ function get-cpython-version() {
     if [ -z "$python" ]; then
         log "missing python arg"
         return 1
+    elif [ ! -e "$python" ]; then
+        log "bad python arg '$python'"
+        return 1
     fi
 
     local verstr=$(2>&1 "$python" --version)
@@ -99,6 +103,9 @@ function resolve-cpython-version() {
             python=version
             version=
         fi
+    elif [ ! -e "$python" ]; then
+        log "bad python arg '$python'"
+        return 1
     fi
 
     if [ -z "$version" ]; then
@@ -201,7 +208,7 @@ function match-git-revision() {
     local grepargs='-o'
     local quiet=false
     local strict=false
-    while [ 1 -eq 1 ]; do
+    while [ $# -gt 0 ]; do
         if [ "$1" = '-q' ]; then
 #            grepargs="$grepargs -q"
             quiet=true
@@ -370,6 +377,17 @@ function resolve-cpython-revision() {
 #######################################
 # venv
 
+function resolve-venv-root() {
+    local venvexe=$1
+
+    local bindir=$(dirname "$venvexe")
+    if [ "$(basename "$bindir")" != 'bin' ]; then
+        log "bad venvexe arg"
+        return 1
+    fi
+    dirname "$bindir"
+}
+
 function resolve-venv-python() {
     local venvroot=$1
     local version=$2
@@ -378,7 +396,7 @@ function resolve-venv-python() {
         return 1
     fi
 
-    local venvexe="$(realpath "$venvroot")/bin/python"
+    local venvexe="$(realpath --no-symlinks "$venvroot")/bin/python"
     local exists=
     if [ -e "$venvexe" ]; then
         exists=$venvexe
@@ -411,6 +429,13 @@ function get-original-python-from-venv() {
 
 function _validate-venv-python() {
     local venvexe=$1
+    if [ -z "$venvexe" ]; then
+        log "missing venvexe arg"
+        return 1
+    elif [ ! -e "$venvexe" ]; then
+        log "bad venvexe arg '$venvexe'"
+        return 1
+    fi
     local python=$2
     local version=$3
     local revision=$4
@@ -467,6 +492,12 @@ function validate-venv() {
     local python=$2
     local version=$3
     local revision=$4
+    if [ -z "$venvroot" ]; then
+        log "missing venvroot arg"
+        return 1
+    else
+        venvroot=$(realpath --no-symlinks "$venvroot")
+    fi
 
     if [ -n "$python" ]; then
         if match-cpython-version -q "$python"; then
@@ -507,6 +538,8 @@ function ensure-venv() {
     if [ -z "$venvroot" ]; then
         log "missing venvroot arg"
         return 1
+    else
+        venvroot=$(realpath --no-symlinks "$venvroot")
     fi
     if [ -z "$python" ]; then
         log "missing python arg"
@@ -521,6 +554,10 @@ function ensure-venv() {
         (set -x
         "$python" -m venv "$venvroot"
         )
+        #local venvexe=$(resolve-venv-python "$venvroot" "$version")
+        #(set -x
+        #"$venvexe" -m pip install --upgrade pip
+        #)
         return
     fi
 
@@ -535,7 +572,135 @@ function ensure-venv() {
     return 0
 }
 
-function ensure-clean-venv() {
+
+#######################################
+# "matching" venvs
+
+function resolve-matching-base-venv() {
+    local workdir=$1
+    local version=$2
+    if [ -z "$version" ]; then
+        log "missing version arg"
+        return 1
+    fi
+
+    local base="venv_${version//./}"
+    if [ -n "$workdir" ]; then
+        base="$workdir/$base"
+    fi
+    echo "$base"
+    return 0
+}
+
+function resolve-matching-venv() {
+    local workdir=$1
+    local python=$2
+    local version=$3
+    version=$(resolve-cpython-version "$version" "$python")
+    local revision=$4
+    revision=$(resolve-cpython-revision "$revision" "$python")
+
+    local base=$(resolve-matching-base-venv "$workdir" $version)
+    local venvroot=
+
+    # a system-installed Python
+    local spython=
+	if [ -n "$python" ]; then
+	    spython=$(echo "$python" | grep -P -q '^python(\d+?)?(?=\.exe$|$)')
+	fi
+    if [ -n "$spython" ]; then
+        # The revision, if any, is ignored.
+        venvroot="${base}_${spython}"
+    # a Python with an unknown revision
+    elif [ -z "$revision" ]; then
+        venvroot=$base
+    # a Python with a known revision
+    else
+        venvroot="${base}_${revision}"
+    fi
+
+    echo "$venvroot"
+    return 0
+}
+
+function _ensure-matching-venv() {
+    local workdir=$1
+    local python=$2
+    local version=$3
+    local revision=$4
+    local clean=$5
+    if [ -z "$workdir" ]; then
+        log "missing workdir arg"
+        return 1
+    fi
+    if [ -z "$python" ]; then
+        log "missing python arg"
+        return 1
+    elif [ ! -e "$python" ]; then
+        log "bad python arg"
+        return 1
+    fi
+
+    version=$(resolve-cpython-version "$version" "$python")
+    if [ -z "$version" ]; then
+        return 1
+    fi
+
+    local venvroot=$(resolve-matching-venv "$workdir" "$python" "$version" "$revision")
+    local existing=false
+    if [ -L "$venvroot" ]; then
+        rm "$venvroot"
+    elif [ -d "$venvroot" ]; then
+        existing=true
+    fi
+
+    if ! ensure-venv "$venvroot" "$python" $version $revision; then
+        return 1
+    fi
+
+    if [ -n "$clean" ]; then
+        if $existing; then
+            (set -x
+            "$python" -m venv --clear "$venvroot"
+            )
+            if [ $? -ne 0 ]; then
+                return 1
+            fi
+        fi
+    fi
+
+    local link=$(resolve-matching-base-venv "$workdir" $version)
+    if [ "$venvroot" != "$link" ]; then
+        (set -x
+        rm -rf "$link"
+        ln -s "$venvroot" "$link"
+        )
+    fi
+
+    resolve-venv-python "$venvroot" $version
+}
+
+function ensure-matching-venv() {
+    local workdir=$1
+    local python=$2
+    local version=$3
+    local revision=$4
+    if [ -z "$workdir" ]; then
+        log "missing workdir arg"
+        return 1
+    fi
+    if [ -z "$python" ]; then
+        log "missing python arg"
+        return 1
+    elif [ ! -e "$python" ]; then
+        log "bad python arg"
+        return 1
+    fi
+
+    _ensure-matching-venv "$workdir" "$python" "$version" "$revision"
+}
+
+function ensure-clean-matching-venv() {
     local workdir=$1
     local python=$2
     local version=$3
@@ -549,31 +714,7 @@ function ensure-clean-venv() {
         return 1
     fi
 
-    version=$(resolve-cpython-version "$version" "$python")
-    if [ -z "$version" ]; then
-        return 1
-    fi
-
-    local venvroot="$workdir/venv_${version//./}"
-    local existing=false
-    if [ -d "$venvroot" ]; then
-        existing=true
-    fi
-
-    if ! ensure-venv "$venvroot" "$python" $version $revision; then
-        return 1
-    fi
-
-    if existing; then
-        (set -x
-        "$python" -m venv --clear "$venvroot"
-        )
-        if [ $? -ne 0 ]; then
-            return 1
-        fi
-    fi
-
-    resolve-venv-python "$venvroot" $version
+    _ensure-matching-venv "$workdir" "$python" "$version" "$revision" --clean
 }
 
 
@@ -818,10 +959,12 @@ function build-and-install-local-cpython() {
 
 function ensure-cpython() {
     local version=$1
-    local workdir=$(realpath $2)
-    local found=
+    local workdir=$2
+    if [ -n "$workdir" ]; then
+        workdir=$(realpath --no-symlinks "$workdir")
+    fi
 
-    found=$(find-cpython-on-path $version)
+    local found=$(find-cpython-on-path $version)
     if [ -z "$found" ]; then
         log "falling back to a locally built python${version}..."
         found=$(find-local-cpython $version "$workdir")
