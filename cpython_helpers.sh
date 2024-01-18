@@ -24,7 +24,7 @@ function utcnow() {
 function match-cpython-version() {
     local verstr=
     local quiet=false
-    local bugfix=true
+    local bugfix=false
     for arg in "$@"; do
         case "$arg" in
             "")
@@ -34,8 +34,8 @@ function match-cpython-version() {
             --quiet|-q)
                 quiet=true
                 ;;
-            --show-feature|-F)
-                bugfix=false
+            --with-bugfix|-B)
+                bugfix=true
                 ;;
             *)
                 if [ -z "$verstr" ]; then
@@ -82,7 +82,7 @@ function get-cpython-version() {
     fi
 
     local verstr=$(2>&1 "$python" --version)
-    echo "$verstr" | grep -o -P '(?<=^Python )\d+\.\d+.\d+$'
+    match-cpython-version -B "$verstr"
 }
 
 function resolve-cpython-version() {
@@ -103,10 +103,10 @@ function resolve-cpython-version() {
 
     if [ -z "$version" ]; then
         get-cpython-version "$python"
-        return $?
+        return
     fi
 
-    local actual=$(match-cpython-version -F "$version")
+    local actual=$(match-cpython-version -B "$version")
     if [ -z "$actual" ]; then
         log "bad version arg $version"
         return 1
@@ -115,6 +115,10 @@ function resolve-cpython-version() {
 
     if [ -n "$python" ]; then
         local actualversion=$(get-cpython-version "$python")
+        if [ "$(match-cpython-version "$version")" = "$version" ]; then
+            # Chop off any bugfix version.
+            actualversion=$(match-cpython-version "$actualversion")
+        fi
         if [ -n "$actualversion" -a "$actualversion" != "$version" ]; then
             log "version mismatch ($version != $actualversion)"
             return 1
