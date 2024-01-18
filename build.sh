@@ -1,40 +1,49 @@
 #!/usr/bin/env bash
 
 PROJECT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-
-#UTCNOW="$(date --utc +'%Y%m%d-%H%M%S')"
+workdir=$(realpath "$PROJECT_DIR/build")
 
 
 &>/dev/null pushd $PROJECT_DIR
 
-if [ -z "$PYTHON_312" ]; then
-    source cpython_helpers.sh
+source cpython_helpers.sh
 
-    exe_file=build/PYTHON_312
-    find-cpython 3.12 "$exe_file"
-    if [ -e "$exe_file" ]; then
-        PYTHON_312=$(cat "$exe_file")
-    fi
+PYTHON_312_REVISION=
+if [ -z "$PYTHON_312" ]; then
+    echo "###################################################"
+    echo "# \$PYTHON_312 not set; finding/building it"
+    echo "###################################################"
+    echo
+
+    PYTHON_312=$(ensure-cpython 3.12 "$workdir")
     if [ -z "$PYTHON_312" ]; then
-        echo "falling back to a locally built python${version}..."
-        ensure-cpython-installed 3.12 build "$exe_file"
-        if [ -e "$exe_file" ]; then
-            PYTHON_312=$(cat "$exe_file")
-        fi
-        if [ -z "$PYTHON_312" ]; then
-            1>&2 echo 'Please set $PYTHON_312'
-            exit 1
-        fi
+        log 'Please set $PYTHON_312'
+        exit 1
+    fi
+    PYTHON_312_REVISION=$(get-cpython-revision "$PYTHON_312")
+else
+    if [ "$(basename "$PYTHON_312")" = "$PYTHON_312" ]; then
+        PYTHON_312=$(which "$PYTHON_312")
     fi
 fi
 
 
-echo "building extension modules with $("$PYTHON_312" -V)"
-venv_root=$PROJECT_DIR/build/venv_312
-#"$PYTHON_312" -m venv --clear $venv_root
-venv_exe=$venv_root/bin/python3.12
+echo
+echo "###################################################"
+echo "# building the extension modules"
+echo "# (using $("$PYTHON_312" -V))"
+if [ -n "$PYTHON_312_REVISION" ]; then
+    echo "# ($PYTHON_312; revision $PYTHON_312_REVISION)"
+else
+    echo "# ($PYTHON_312; revision unknown)"
+fi
+echo "###################################################"
+echo
 
 set -e
+
+venv_exe=$(ensure-clean-venv "$workdir" "$PYTHON_312" 3.12 $PYTHON_312_REVISION)
+
 (set -x
 "$venv_exe" -m pip install --upgrade pip
 "$venv_exe" -m pip install --upgrade setuptools
@@ -42,6 +51,11 @@ set -e
 "$venv_exe" -m pip install --upgrade build
 "$venv_exe" -P -m build --no-isolation
 )
+
+echo "###################################################"
+echo "# checking the extension modules"
+echo "###################################################"
+echo
 
 #interpreters_3_12-0.0.1.1.tar.gz
 #interpreters_3_12-0.0.1.1-cp312-cp312-linux_x86_64.whl
@@ -53,7 +67,8 @@ DIST_WHEEL=$(ls dist/interpreters_3_12-*.whl)
 "$venv_exe" -c 'import _interpreters'
 "$venv_exe" -c 'import _interpchannels'
 "$venv_exe" -c 'import _interpqueues'
-"$venv_exe" -m pip uninstall interpreters_3_12
+# XXX Do not bother uninstalling?
+"$venv_exe" -m pip uninstall --yes interpreters_3_12
 )
 
 &>/dev/null popd

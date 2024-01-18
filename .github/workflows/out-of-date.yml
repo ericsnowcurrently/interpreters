@@ -1,0 +1,33 @@
+name: Check out-of-date
+
+on:
+  push:
+    branches:
+    - 'main'
+  pull_request:
+    branches:
+    - 'main'
+  schedule:
+    # "nightly"
+    - cron: '0 12 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  check-out-of-date:
+    runs-on: ubuntu-20.04
+    #runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.12"
+    - name: Update the repo
+      run: |
+        python3 scripts/update.py
+    - name: Check for updates
+      run: |
+        git diff src/orig
+        git diff --exit-code --stat src/orig

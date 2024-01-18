@@ -72,12 +72,12 @@ def parse_url(url):
     github = None
     url, localroot = _utils.parse_url(url)
     if url:
-        m = re.match('^https://github.com/(\w+)/(\w+)', url)
+        m = re.match(r'^https://github.com/(\w+)/(\w+)', url)
         if m:
             org, repo = m.groups()
             github = (org, repo)
         else:
-            m = re.match('git@github.com:(\w+)/(\w+).git', url)
+            m = re.match(r'^git@github.com:(\w+)/(\w+).git', url)
             if m:
                 org, repo = m.groups()
                 github = (org, repo)

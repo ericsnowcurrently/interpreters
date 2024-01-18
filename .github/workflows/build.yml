@@ -1,0 +1,31 @@
+name: Build
+
+on:
+  push:
+    branches:
+    - 'main'
+  pull_request:
+    branches:
+    - 'main'
+
+permissions:
+  contents: read
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.12
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.12"
+    - name: Run the build script
+      env:
+        PYTHON_312: python3
+      run: ./build.sh
+  # XXX Build for Windows too:
+  #build-windows:
+  #  runs-on: windows-latest
+  #  steps:
+  #    ...
