@@ -1,5 +1,8 @@
 # bash script helpers
 
+if [ -z "$_scripts_utils_sh" ]; then
+_scripts_utils_sh=1
+
 
 #######################################
 # general
@@ -17,175 +20,13 @@ function utcnow() {
     date --utc +'%Y%m%d-%H%M%S'
 }
 
-
-#######################################
-# Python version
-
-function match-cpython-version() {
-    local verstr=
-    local quiet=false
-    local bugfix=false
-    local arg=
-    for arg in "$@"; do
-        case "$arg" in
-            "")
-                log "got unexpected empty arg"
-                return 1
-                ;;
-            --quiet|-q)
-                quiet=true
-                ;;
-            --with-bugfix|-B)
-                bugfix=true
-                ;;
-            *)
-                if [ -z "$verstr" ]; then
-                    verstr=$arg
-                else
-                    log "got unsupported arg $arg"
-                    return 1
-                fi
-        esac
-    done
-
-    local regex='\b\d+\.\d+(.\d+)?\b'
-    if ! $bugfix; then
-        regex='\b\d+\.\d+(?=.\d+)?\b'
-    fi
-
-    local found=
-    if [ -z "$verstr" -o "$verstr" = '-' ]; then
-        #log "+ grep -o -P '$regex'"
-        found=$(grep -o -P "$regex")
-    else
-        #log "+ echo $verstr | grep -o -P '$regex'"
-        found=$(echo "$verstr" | grep -o -P "$regex")
-    fi
-    if [ $? -ne 0 ]; then
-        return 1
-    fi
-    if [ "$(echo "$found" | wc -l)" -gt 1 ]; then
-        log "ambiguous multi-line verstr arg"
-        return 1
-    fi
-
-    if ! $quiet; then
-        echo "$found"
-    fi
-    return 0
+function abspath() {
+    realpath --no-symlinks "$1"
 }
 
-function get-cpython-version() {
-    local python=$1
-    if [ -z "$python" ]; then
-        log "missing python arg"
-        return 1
-    elif [ ! -e "$python" ]; then
-        log "bad python arg '$python'"
-        return 1
-    fi
-
-    local verstr=$(2>&1 "$python" --version)
-    match-cpython-version -B "$verstr"
-}
-
-function resolve-cpython-version() {
-    local version=$1
-    local python=$2
-
-    if [ -z "$python" ]; then
-        if [ -z "$version" ]; then
-            log "missing version arg"
-            return 1
-        fi
-
-        if [ -e "$version" ]; then
-            python=version
-            version=
-        fi
-    elif [ ! -e "$python" ]; then
-        log "bad python arg '$python'"
-        return 1
-    fi
-
-    if [ -z "$version" ]; then
-        get-cpython-version "$python"
-        return
-    fi
-
-    local actual=$(match-cpython-version -B "$version")
-    if [ -z "$actual" ]; then
-        log "bad version arg $version"
-        return 1
-    fi
-    version=$actual
-
-    if [ -n "$python" ]; then
-        local actualversion=$(get-cpython-version "$python")
-        if [ "$(match-cpython-version "$version")" = "$version" ]; then
-            # Chop off any bugfix version.
-            actualversion=$(match-cpython-version "$actualversion")
-        fi
-        if [ -n "$actualversion" -a "$actualversion" != "$version" ]; then
-            log "version mismatch ($version != $actualversion)"
-            return 1
-        fi
-    fi
-
-    echo "$version"
-    return 0
-}
-
-
-#######################################
-# $PATH
-
-function check-python-on-path() {
-    local executable=$1
-    local version=$2
-    local found=
-
-    log "looking for ${executable} on \$PATH..."
-    found=$(which "$executable")
-    if [ -z "$found" ]; then
-        log "...not found"
-        return 1
-    else
-        log "...checking version..."
-        local verstr=$(2>&1 "$found" --version)
-        if echo $verstr | grep -P "^Python ${version}(\.\d+)?$"; then
-            log "...okay"
-        else
-            log "...wrong version ($verstr)"
-            return 1
-        fi
-    fi
-    echo "$found"
-    return 0
-}
-
-function find-cpython-on-path() {
-    local version=$1
-    local found=
-
-    if [ -e "$version" ]; then
-        log 'find-cpython: missing version arg'
-        return 1
-    fi
-
-    found=$(check-python-on-path python${version} $version)
-    if [ -z "$found" ]; then
-        found=$(check-python-on-path python3 $version)
-        if [ -z "$found" ]; then
-            found=$(check-python-on-path python $version)
-            if [ -z "$found" ]; then
-                log "Python $version not found"
-                return 1
-            fi
-        fi
-    fi
-    echo $found
-    return 0
+function isabspath() {
+    local filename=$1
+    test "$(abspath "$filename")" = "$filename"
 }
 
 
@@ -221,16 +62,67 @@ function match-git-revision() {
     done
     local rev=$1
 
+    local matched=
     local regex='\b([a-f0-9]{6,40}|[A-F0-9]{6,40})\b'
     if $strict; then
         regex='\b([a-f0-9]{40}|[A-F0-9]{40})\b'
     fi
     grepargs="$grepargs -P"
     if [ -z "$rev" -o "$rev" = '-' ]; then
-        grep $grepargs "$regex"
+        matched=$(grep $grepargs "$regex")
     else
-        echo $rev | grep $grepargs "$regex"
+        matched=$(echo $rev | grep $grepargs "$regex")
     fi
+
+    if [ -z "$matched" ]; then
+        return 1
+    fi
+    if ! $quiet; then
+        echo "$matched"
+    fi
+    return 0
+}
+
+function normalize-git-revision() {
+    local revision=$1
+    local look_up_revision=$2
+
+    if [ -z "$revision" ]; then
+        log "missing revision arg"
+        return 1
+    fi
+    if [ "$(echo "$revision" | wc -l)" -gt 1 ]; then
+        log "got multiline revision arg"
+        return 1
+    fi
+
+    local matched=$(match-git-revision "$revision")
+    if [ -z "$matched" ]; then
+        log "revision arg must be a git revision, got '$revision'"
+        return 1
+    fi
+    revision=$matched
+
+    if ! match-git-revision -q --strict "$revision"; then
+        if [ -z "$look_up_revision" ]; then
+            log "revision arg must be a full 80-byte revision, got '$revision'"
+            return 1
+        fi
+        local actual=$("$look_up_revision" "$revision")
+        if [ -z "$actual" ]; then
+            log "revision $revision not found"
+            return 1
+        fi
+        if ! match-git-revision -q --strict "$actual"; then
+            log "resolved $revision to a bad revision ($actual)"
+            return 1
+        fi
+        revision=$actual
+    fi
+    revsion=${revision^^}  # upper-case
+
+    echo "$revision"
+    return 0
 }
 
 
@@ -244,7 +136,13 @@ function gh-normalize-revision() {
     local repo=$2
     local ref=$3
 
-    log "+ curl -s $GH_API/$org/$repo/commits/$ref | jq --raw-output .sha"
+    # XXX A temporary hack to work around rate limiting
+    if [ "$ref" = 'bd9ea91e5f' ]; then
+        echo 'BD9EA91E5F7ACE12FE26584F4B130141C62D5BA3'
+        return 0
+    fi
+
+    #log "+ curl -s $GH_API/$org/$repo/commits/$ref | jq --raw-output .sha"
     local rev=$(curl -s $GH_API/$org/$repo/commits/$ref | jq --raw-output .sha)
     if [ -z "$rev" -o "$rev" = 'null' ]; then
         log "unknown revision $ref"
@@ -283,93 +181,176 @@ function gh-look-up-revision() {
 
 
 #######################################
-# cpython git revisions
+# Python version
 
-function _resolve-cpython-revision() {
-    local ref=$1
+function match-python-version() {
+    local verstr=
+    local quiet=false
+    local bugfix=false
+    local arg=
+    for arg in "$@"; do
+        case "$arg" in
+            "")
+                log "got unexpected empty arg"
+                return 1
+                ;;
+            --quiet|-q)
+                quiet=true
+                ;;
+            --with-bugfix|-B)
+                bugfix=true
+                ;;
+            --without-bugfix)
+                bugfix=false
+                ;;
+            *)
+                if [ -z "$verstr" ]; then
+                    verstr=$arg
+                else
+                    log "got unsupported arg $arg"
+                    return 1
+                fi
+        esac
+    done
 
-    local rev=$(match-git-revision --strict "$ref")
-    if [ -n "$rev" ]; then
-        rev=${rev^^}  # upper-case
-    else
-        # Look up the full revision.
-        rev=$(gh-look-up-revision python cpython "$ref")
-        if [ -z "$rev" ]; then
-            return 1
-        fi
+    local regex='\b\d+\.\d+(.\d+)?\b'
+    if ! $bugfix; then
+        regex='\b\d+\.\d+(?=.\d+)?\b'
     fi
-    echo "$rev"
+
+    local found=
+    if [ -z "$verstr" -o "$verstr" = '-' ]; then
+        #log "+ grep -o -P '$regex'"
+        found=$(grep -o -P "$regex")
+    else
+        #log "+ echo $verstr | grep -o -P '$regex'"
+        found=$(echo "$verstr" | grep -o -P "$regex")
+    fi
+    if [ $? -ne 0 ]; then
+        return 1
+    fi
+    if [ "$(echo "$found" | wc -l)" -gt 1 ]; then
+        log "ambiguous multi-line verstr arg"
+        return 1
+    fi
+
+    if ! $quiet; then
+        echo "$found"
+    fi
     return 0
 }
 
-function normalize-cpython-revision() {
-    local rev=$1
-    if [ -z "$rev" ]; then
-        log "missing revision arg"
-        return 1
-    fi
-    if [ "$(echo "$rev" | wc -l)" -gt 1 ]; then
-        log "got multiline rev arg"
-        return 1
-    fi
-
-    local rev=$(match-git-revision "$rev")
-    if [ -z "$rev" ]; then
-        log "invalid revision $rev"
-        return 1
-    fi
-    _resolve-cpython-revision $rev
-}
-
-function get-cpython-revision() {
+function get-python-version() {
     local python=$1
-
-    local verstr=$("$python" -VV)
-    local rev=$(match-git-revision "$verstr")
-    if [ -z "$rev" ]; then
-        log "could not determine revision"
+    if [ -z "$python" ]; then
+        log "missing python arg"
+        return 1
+    elif [ ! -e "$python" ]; then
+        log "bad python arg '$python'"
         return 1
     fi
-    _resolve-cpython-revision $rev
+
+    local verstr=$(2>&1 "$python" --version)
+    match-python-version -B "$verstr"
 }
 
-function resolve-cpython-revision() {
-    local revision=$1
+function resolve-python-version() {
+    local version=$1
     local python=$2
 
     if [ -z "$python" ]; then
-        if [ -z "$revision" ]; then
-            log "missing revision arg"
+        if [ -z "$version" ]; then
+            log "missing version arg"
             return 1
         fi
 
-        if [ -e "$revision" ]; then
-            python=revision
-            revision=
+        if [ -e "$version" ]; then
+            python=version
+            version=
         fi
+    elif [ ! -e "$python" ]; then
+        log "bad python arg '$python'"
+        return 1
     fi
 
-    if [ -z "$revision" ]; then
-        get-cpython-revision "$python"
+    if [ -z "$version" ]; then
+        get-python-version "$python"
         return
     fi
 
-    local actual=$(match-git-revision "$revision")
+    local actual=$(match-python-version -B "$version")
     if [ -z "$actual" ]; then
-        log "bad revision arg $revision"
+        log "bad version arg $version"
         return 1
     fi
-    revision=$actual
+    version=$actual
 
     if [ -n "$python" ]; then
-        local actualrevision=$(get-cpython-revision "$python")
-        if [ -n "$actualrevision" -a "$actualrevision" != "$revision" ]; then
-            log "revision mismatch ($revision != $actualrevision)"
+        local actualversion=$(get-python-version "$python")
+        if [ "$(match-python-version "$version")" = "$version" ]; then
+            # Chop off any bugfix version.
+            actualversion=$(match-python-version "$actualversion")
+        fi
+        if [ -n "$actualversion" -a "$actualversion" != "$version" ]; then
+            log "version mismatch ($version != $actualversion)"
             return 1
         fi
     fi
 
-    echo "$revision"
+    echo "$version"
+    return 0
+}
+
+
+#######################################
+# installed Python
+
+function _check-python-on-path() {
+    local executable=$1
+    local version=$2
+    local found=
+
+    log "looking for ${executable} on \$PATH..."
+    found=$(which "$executable")
+    if [ -z "$found" ]; then
+        log "...not found"
+        return 1
+    else
+        log "...checking version..."
+        local verstr=$(2>&1 "$found" --version)
+        if echo $verstr | grep -P "^Python ${version}(\.\d+)?$"; then
+            log "...okay"
+        else
+            log "...wrong version ($verstr)"
+            return 1
+        fi
+    fi
+    echo "$found"
+    return 0
+}
+
+function find-python-on-path() {
+    local version=$1
+    local found=
+
+    if [ -z "$version" ]; then
+        log 'find-python-on-path: missing version arg'
+        return 1
+    fi
+
+    found=$(_check-python-on-path python${version} $version)
+    if [ -z "$found" ]; then
+        found=$(_check-python-on-path python3 $version)
+        if [ -z "$found" ]; then
+            found=$(_check-python-on-path python $version)
+            if [ -z "$found" ]; then
+                log "Python $version not found on \$PATH"
+                return 1
+            fi
+        fi
+    fi
+    log "Python $version found on \$PATH at $found"
+    echo "$found"
     return 0
 }
 
@@ -396,7 +377,7 @@ function resolve-venv-python() {
         return 1
     fi
 
-    local venvexe="$(realpath --no-symlinks "$venvroot")/bin/python"
+    local venvexe="$(abspath "$venvroot")/bin/python"
     local exists=
     if [ -e "$venvexe" ]; then
         exists=$venvexe
@@ -438,7 +419,6 @@ function _validate-venv-python() {
     fi
     local python=$2
     local version=$3
-    local revision=$4
 
     if [ -n "$python" ]; then
         #local actualexe=$(get-original-python-from-venv "$venvexe")
@@ -448,33 +428,16 @@ function _validate-venv-python() {
             return 0
         fi
 
-        version=$(resolve-cpython-version "$version" "$python")
-        revision=$(resolve-cpython-revision "$revision" "$python")
-    elif [ -n "$revision" ]; then
-        revision=$(normalize-cpython-revision "$revision")
-        if [ -z "$revision" ]; then
-            return 1
-        fi
+        version=$(resolve-python-version "$version" "$python")
     fi
 
     # Check the version.
     if [ -n "$version" ]; then
-        local actualversion=$(get-cpython-version "$venvexe")
+        local actualversion=$(get-python-version "$venvexe")
         if [ -z "$actualversion" ]; then
             log "actual version not known (ignoring)"
         elif [ "$actualversion" != "$version" ]; then
             log "version mismatch ($actualversion != $version)"
-            return 1
-        fi
-    fi
-
-    # Check the revision.
-    if [ -n "$revision" ]; then
-        local actualrev=$(get-cpython-revision "$venvexe")
-        if [ -z "$actualrev" ]; then
-            log "actual revision not known (ignoring)"
-        elif [ "$actualrev" != "$revision" ]; then
-            log "revision mismatch ($actualrev != $revision)"
             return 1
         fi
     fi
@@ -491,16 +454,15 @@ function validate-venv() {
     local venvroot=$1
     local python=$2
     local version=$3
-    local revision=$4
     if [ -z "$venvroot" ]; then
         log "missing venvroot arg"
         return 1
     else
-        venvroot=$(realpath --no-symlinks "$venvroot")
+        venvroot=$(abspath "$venvroot")
     fi
 
     if [ -n "$python" ]; then
-        if match-cpython-version -q "$python"; then
+        if match-python-version -q "$python"; then
             version=python
             revision=version
             python=
@@ -518,7 +480,7 @@ function validate-venv() {
     fi
 
     # Check the executable.
-    if ! _validate-venv-python "$venvexe" "$python" "$version" "$revision"; then
+    if ! _validate-venv-python "$venvexe" "$python" "$version"; then
         return 1
     fi
 
@@ -530,16 +492,53 @@ function validate-venv() {
     return 0
 }
 
-function ensure-venv() {
+function _create-venv() {
     local venvroot=$1
     local python=$2
     local version=$3
-    local revision=$4
+
+    log "creating new venv at $venvroot"
+    (set -x
+    "$python" -m venv "$venvroot"
+    )
+    #local venvexe=$(resolve-venv-python "$venvroot" "$version")
+    #(set -x
+    #"$venvexe" -m pip install --upgrade pip
+    #)
+}
+
+function create-venv() {
+    local venvroot=$1
+    local python=$2
+    local version=$3
+
     if [ -z "$venvroot" ]; then
         log "missing venvroot arg"
         return 1
     else
-        venvroot=$(realpath --no-symlinks "$venvroot")
+        venvroot=$(abspath "$venvroot")
+    fi
+    if [ -z "$python" ]; then
+        log "missing python arg"
+        return 1
+    elif [ ! -e "$python" ]; then
+        log "bad python arg"
+        return 1
+    fi
+
+    _create-venv "$venvroot" "$python" "$version"
+}
+
+function ensure-venv() {
+    local venvroot=$1
+    local python=$2
+    local version=$3
+
+    if [ -z "$venvroot" ]; then
+        log "missing venvroot arg"
+        return 1
+    else
+        venvroot=$(abspath "$venvroot")
     fi
     if [ -z "$python" ]; then
         log "missing python arg"
@@ -550,14 +549,7 @@ function ensure-venv() {
     fi
 
     if [ ! -e "$venvroot" ]; then
-        log "creating new venv at $venvroot"
-        (set -x
-        "$python" -m venv "$venvroot"
-        )
-        #local venvexe=$(resolve-venv-python "$venvroot" "$version")
-        #(set -x
-        #"$venvexe" -m pip install --upgrade pip
-        #)
+        _create-venv "$venvroot" "$python" "$version"
         return
     fi
 
@@ -567,419 +559,16 @@ function ensure-venv() {
     fi
 
     log "found existing venv at $venvroot"
-    validate-venv "$venvroot" "$python" "$version" "$revision"
+    validate-venv "$venvroot" "$python" "$version"
 
-    return 0
+    #local venvexe=$(resolve-venv-python "$venvroot" "$version")
+    #(set -x
+    #"$venvexe" -m pip install --upgrade pip
+    #)
 }
 
 
-#######################################
-# "matching" venvs
+# END $_scripts_utils_sh
+fi
 
-function resolve-matching-base-venv() {
-    local workdir=$1
-    local version=$2
-    if [ -z "$version" ]; then
-        log "missing version arg"
-        return 1
-    fi
-
-    local base="venv_${version//./}"
-    if [ -n "$workdir" ]; then
-        base="$workdir/$base"
-    fi
-    echo "$base"
-    return 0
-}
-
-function resolve-matching-venv() {
-    local workdir=$1
-    local python=$2
-    local version=$3
-    version=$(resolve-cpython-version "$version" "$python")
-    local revision=$4
-    revision=$(resolve-cpython-revision "$revision" "$python")
-
-    local base=$(resolve-matching-base-venv "$workdir" $version)
-    local venvroot=
-
-    # a system-installed Python
-    local spython=
-	if [ -n "$python" ]; then
-	    spython=$(echo "$python" | grep -P -q '^python(\d+?)?(?=\.exe$|$)')
-	fi
-    if [ -n "$spython" ]; then
-        # The revision, if any, is ignored.
-        venvroot="${base}_${spython}"
-    # a Python with an unknown revision
-    elif [ -z "$revision" ]; then
-        venvroot=$base
-    # a Python with a known revision
-    else
-        venvroot="${base}_${revision}"
-    fi
-
-    echo "$venvroot"
-    return 0
-}
-
-function _ensure-matching-venv() {
-    local workdir=$1
-    local python=$2
-    local version=$3
-    local revision=$4
-    local clean=$5
-    if [ -z "$workdir" ]; then
-        log "missing workdir arg"
-        return 1
-    fi
-    if [ -z "$python" ]; then
-        log "missing python arg"
-        return 1
-    elif [ ! -e "$python" ]; then
-        log "bad python arg"
-        return 1
-    fi
-
-    version=$(resolve-cpython-version "$version" "$python")
-    if [ -z "$version" ]; then
-        return 1
-    fi
-
-    local venvroot=$(resolve-matching-venv "$workdir" "$python" "$version" "$revision")
-    local existing=false
-    if [ -L "$venvroot" ]; then
-        rm "$venvroot"
-    elif [ -d "$venvroot" ]; then
-        existing=true
-    fi
-
-    if ! ensure-venv "$venvroot" "$python" $version $revision; then
-        return 1
-    fi
-
-    if [ -n "$clean" ]; then
-        if $existing; then
-            (set -x
-            "$python" -m venv --clear "$venvroot"
-            )
-            if [ $? -ne 0 ]; then
-                return 1
-            fi
-        fi
-    fi
-
-    local link=$(resolve-matching-base-venv "$workdir" $version)
-    if [ "$venvroot" != "$link" ]; then
-        (set -x
-        rm -rf "$link"
-        ln -s "$venvroot" "$link"
-        )
-    fi
-
-    resolve-venv-python "$venvroot" $version
-}
-
-function ensure-matching-venv() {
-    local workdir=$1
-    local python=$2
-    local version=$3
-    local revision=$4
-    if [ -z "$workdir" ]; then
-        log "missing workdir arg"
-        return 1
-    fi
-    if [ -z "$python" ]; then
-        log "missing python arg"
-        return 1
-    elif [ ! -e "$python" ]; then
-        log "bad python arg"
-        return 1
-    fi
-
-    _ensure-matching-venv "$workdir" "$python" "$version" "$revision"
-}
-
-function ensure-clean-matching-venv() {
-    local workdir=$1
-    local python=$2
-    local version=$3
-    local revision=$4
-    if [ -z "$workdir" ]; then
-        log "missing workdir arg"
-        return 1
-    fi
-    if [ -z "$python" ]; then
-        log "missing python arg"
-        return 1
-    fi
-
-    _ensure-matching-venv "$workdir" "$python" "$version" "$revision" --clean
-}
-
-
-#######################################
-# local repo
-
-CPYTHON_UPSTREAM=https://github.com/python/cpython
-
-function ensure-cpython-source() {
-    local version=$1
-    local srcdir=$2
-    if [ -e $srcdir ]; then
-        log "found local clone: $srcdir"
-        log "updating..."
-        if ! run git -C "$srcdir" checkout $version; then
-            return 1
-        elif ! run git -C "$srcdir" pull; then
-            return 1
-        fi
-    else
-        log "cloning CPython locally..."
-        if ! run git clone --branch $version $CPYTHON_UPSTREAM "$srcdir"; then
-            return 1
-        elif ! run git -C "$srcdir" checkout $version; then
-            return 1
-        fi
-    fi
-    return 0
-}
-
-
-#######################################
-# custom build/install
-
-function build-cpython() {
-    local debug=$BUILD_DEBUG
-    if [ "$1" = '--debug' ]; then
-        debug=1
-        shift
-    elif [ "$1" = '--no-debug' ]; then
-        debug=0
-        shift
-    elif [ -z "$debug" ]; then
-        debug=0
-    fi
-    local srcdir=$1
-    local builddir=$2
-    local installdir=$3
-    if [ -z "$installdir" ]; then
-        log "missing installdir (arg #3)"
-        return 1
-    fi
-    local exitcode=0
-
-    local config_args=(
-        "--prefix=$installdir"
-    )
-    if [ "$debug" -eq 0 ]; then
-        log "building in $builddir..."
-    else
-        log "building (debug) in $builddir..."
-        config_cmd+=(
-            "--with-pydebug"
-            "CFLAGS=-O0"
-        )
-    fi
-
-    1>&2 mkdir -p "$builddir"
-    &>/dev/null pushd "$builddir"
-    if ! run $srcdir/configure ${config_args[@]}; then
-        exitcode=1
-    elif ! run make -j8; then
-        exitcode=1
-    fi
-    &>/dev/null popd
-    return $exitcode
-}
-
-function version-from-built-cpython() {
-    local builddir=$1
-    grep '^VERSION=' "$builddir/python-config" | awk -F'"' '{print $2}'
-}
-
-function installdir-from-built=cpython() {
-    local builddir=$1
-    grep '^prefix=' "$builddir/python-config" | awk -F'"' '{print $2}'
-}
-
-function resolve-installed-cpython() {
-    local installdir=$1
-    local version=$2
-    echo "$installdir/bin/python${version}"
-}
-
-function install-built-cpython() {
-    local builddir=$1
-    local installdir=$2
-    local version=$3
-    if [ -z "$installdir" ]; then
-        installdir=$(installdir-from-built-cpython "$builddir")
-        if [ -z "$installdir" ]; then
-            log "could not determine installdir (did you already build?)"
-            return 1
-        fi
-    fi
-    if [ -z "$version" ]; then
-        version=$(version-from-built-cpython "$builddir")
-        if [ -z "$version" ]; then
-            log "could not determine version (did you already build?)"
-            return 1
-        fi
-    fi
-    local executable=$(resolve-installed-cpython "$installdir" $version)
-
-    log "installing..."
-    &>/dev/null pushd "$builddir"
-    if ! run make install; then
-        &>/dev/null popd
-        return 1
-    elif [ ! -e "$executable" ]; then
-        log "something went wrong ($exectuable not found)"
-        &>/dev/null popd
-        return 1
-    fi
-    &>/dev/null popd
-    echo "$executable"
-    return 0
-}
-
-
-#######################################
-# local build project
-
-function resolve-projroot() {
-    local workdir=$1
-    if [ -z "$workdir" ]; then
-        workdir="."
-    fi
-    echo "$1/cpython"
-}
-
-function resolve-local-srcdir() {
-    # We expect .../cpython
-    local projdir=$1
-    echo "$projdir/source"
-}
-
-function resolve-local-builddir() {
-    local version=$1
-    # We expect .../cpython
-    local projdir=$2
-    echo "$projdir/build_${version}"
-}
-
-function resolve-local-installdir() {
-    local version=$1
-    # We expect .../cpython
-    local projdir=$2
-    echo "$projdir/installed_${version}"
-}
-
-function version-from-local-dir() {
-    local name=$(basename "$1")
-    echo $name | grep -P -o '(?<=^build_|^install_)\d+\.\d+'
-}
-
-function prep-local-project() {
-    local version=$1
-    # We expect .../cpython
-    local projdir=$2
-    local srcdir=$(resolve-local-srcdir "$projdir")
-    if [ -z "$srcdir" ]; then
-        return 1
-    fi
-
-    1>&2 mkdir -p "$projdir"
-    ensure-cpython-source $version "$srcdir"
-}
-
-function build-local-cpython() {
-    local version=$1
-    # We expect .../cpython
-    local projdir=$2
-    local srcdir=$(resolve-local-srcdir "$projdir")
-    local builddir=$(resolve-local-builddir $version "$projdir")
-    local installdir=$(resolve-local-installdir $version "$projdir")
-    if [ -z "$srcdir" -o -z "$builddir" -o -z "$installdir" ]; then
-        return 1
-    fi
-
-    build-cpython "$srcdir" "$builddir" "$installdir"
-}
-
-function install-local-cpython() {
-    local version=$1
-    # We expect .../cpython
-    local projdir=$2
-    local builddir=$(resolve-local-builddir $version "$projdir")
-    local installdir=$(resolve-local-installdir $version "$projdir")
-    if [ -z "$builddir" -o -z "$installdir" ]; then
-        return 1
-    fi
-
-    install-built-cpython "$builddir" "$installdir" $version
-}
-
-function find-local-cpython() {
-    local version=$1
-    local workdir=$2
-    local projdir=$(resolve-projroot "$workdir")
-    local installdir=$(resolve-local-installdir $version "$projdir")
-    local executable=$(resolve-installed-cpython "$installdir" $version)
-    if [ -z "$projdir" -o -z "$installdir" -o -z "$executable" ]; then
-        return 1
-    fi
-
-    if [ ! -e $executable ]; then
-        return 1
-    fi
-    echo $executable
-    return 0
-}
-
-function build-and-install-local-cpython() {
-    local version=$1
-    local workdir=$2
-    local projdir=$(resolve-projroot "$workdir")
-    if [ -z "$projdir" ]; then
-        return 1
-    fi
-
-    if ! prep-local-project $version "$projdir"; then
-        return 1;
-    elif ! build-local-cpython $version "$projdir"; then
-        return 1
-    fi
-    install-local-cpython $version "$projdir"
-}
-
-
-#######################################
-
-function ensure-cpython() {
-    local version=$1
-    local workdir=$2
-    if [ -n "$workdir" ]; then
-        workdir=$(realpath --no-symlinks "$workdir")
-    fi
-
-    local found=$(find-cpython-on-path $version)
-    if [ -z "$found" ]; then
-        log "falling back to a locally built python${version}..."
-        found=$(find-local-cpython $version "$workdir")
-        if [ -n "$found" ]; then
-            log "found locally built: $found"
-        else
-            found=$(build-and-install-local-cpython $version $workdir)
-            if [ -z "$found" ]; then
-                return 1
-            fi
-        fi
-    fi
-    if [ -z "$found" ]; then
-        return 1
-    fi
-    echo $found
-    return 0
-}
+# vim: set filetype=sh :
