@@ -23,7 +23,7 @@ jobs:
     - name: Run the build script
       env:
         PYTHON_312: python3
-      run: ./build.sh
+      run: scripts/build.sh --ci python3
   # XXX Build for Windows too:
   #build-windows:
   #  runs-on: windows-latest
