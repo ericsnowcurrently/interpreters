@@ -82,9 +82,19 @@ function ensure-cpython() {
         # XXX Look for a locally-built cpython.
         # XXX Build cpython locally.
         fail "missing python arg"
-    elif [ ! -e "$python" ]; then
-        fail "bad python arg '$python'"
     else
+        local path_installed=false
+        if [ "$(basename "$python")" == "$python" ]; then
+            if &>/dev/null which "$python"; then
+                path_installed=true
+            else
+                python=$(abspath "$python")
+            fi
+        fi
+        if ! $path_installed && [ ! -e "$python" ]; then
+            fail "bad python arg '$python'"
+        fi
+
         if ! check-python-feature-version "$python" 3.12; then
             exit 1
         fi
@@ -224,7 +234,7 @@ function parse-cli() {
                 ;;
             *)
                 if [ -z "$python" ]; then
-                    python=$(abspath "$1")
+                    python=$1
                 else
                     fail "unsupported arg '$1'"
                 fi
