@@ -13,7 +13,7 @@ init_exceptions(PyInterpreterState *interp)
 
     // "PyExc_InterpreterError"
     exctype = PyErr_NewExceptionWithDoc(
-        "_interpreters.PyExc_InterpreterError",
+        "interpreters.InterpreterError",
         "A cross-interpreter operation failed",
         NULL, NULL);
     if (exctype == NULL) {
@@ -29,7 +29,7 @@ init_exceptions(PyInterpreterState *interp)
 
     // PyExc_InterpreterNotFoundError
     exctype = PyErr_NewExceptionWithDoc(
-        "_interpreters.PyExc_InterpreterNotFoundError",
+        "interpreters.InterpreterNotFoundError",
         "An interpreter was not found",
         basetype, NULL);
     if (exctype == NULL) {
@@ -44,7 +44,7 @@ init_exceptions(PyInterpreterState *interp)
 
     // NotShareableError
     exctype = PyErr_NewException(
-        "_interpreters.NotShareableError",
+        "interpreters.NotShareableError",
         PyExc_ValueError, NULL);
     if (exctype == NULL) {
         err = -1;
