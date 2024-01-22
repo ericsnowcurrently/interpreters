@@ -41,6 +41,21 @@ SRC_PY = [
     '/Lib/interpreters/queues.py',
     '/Lib/interpreters/channels.py',
 ]
+TEST_PY = [
+    '/Lib/test/__init__.py',
+    '/Lib/test/support/__init__.py',
+    '/Lib/test/support/import_helper.py',
+    '/Lib/test/support/os_helper.py',
+    '/Lib/test/support/threading_helper.py',
+    '/Lib/test/test_interpreters/__init__.py',
+    '/Lib/test/test_interpreters/__main__.py',
+    '/Lib/test/test_interpreters/utils.py',
+    '/Lib/test/test_interpreters/test_api.py',
+    '/Lib/test/test_interpreters/test_lifecycle.py',
+    '/Lib/test/test_interpreters/test_stress.py',
+    '/Lib/test/test_interpreters/test_queues.py',
+    '/Lib/test/test_interpreters/test_channels.py',
+]
 SRC_C = [
     '/Modules/_interpretersmodule.c',
     '/Modules/_interpqueuesmodule.c',
@@ -87,6 +102,10 @@ INCLUDES_INDIRECT = [
     '/Include/internal/pycore_object.h',
 ]
 
+DUMMY = set([
+    '/Lib/test/test_interpreters/__init__.py',
+    '/Lib/test/test_interpreters/__main__.py',
+])
 USE_SHIM = set([
     # incompatible, new, excessive baggage, etc.
 
@@ -166,12 +185,20 @@ def _download_source(repo, revision, downdir, knowndirs):
     def download(path):
         target, downpath, altpath = _download(path)
         assert files[path] == target, (files[path], target)
-        files[path] = (target, 'copy')
+        if path in DUMMY:
+            files[path] = (target, 'dummy')
+        else:
+            files[path] = (target, 'copy')
         if downpath == altpath:
             old.append(path)
 
     debug('.py files:')
     for path in SRC_PY:
+        download(path)
+
+    debug('')
+    debug('test files:')
+    for path in TEST_PY:
         download(path)
 
     debug('')
@@ -196,6 +223,8 @@ def _download_includes(repo, revision, cfiles, downdir, knowndirs):
         target = _download(path)
         copy = 'copy'
         if path in USE_SHIM:
+            copy = 'dummy'
+        elif path in DUMMY:
             copy = 'dummy'
         elif parent:
             _, parent_copy = files[parent]
@@ -227,8 +256,15 @@ def _resolve_applied_downloads(files, srcdir, incldir):
         assert path.startswith('/'), repr(path)
         basename = path.split('/')[-1]
         if path.endswith('.py'):
-            assert '/interpreters/' in path, repr(path)
-            reltarget = f'interpreters/{basename}'
+            if '/test_interpreters/' in path:
+                reltarget = f'tests/test_interpreters/{basename}'
+            elif path == '/Lib/test/__init__.py':
+                reltarget = 'tests/maybe-needed/test/__init__.py'
+            elif path.endswith(f'/support/{basename}'):
+                reltarget = f'tests/maybe-needed/test/support/{basename}'
+            else:
+                assert '/interpreters/' in path, repr(path)
+                reltarget = f'interpreters/{basename}'
         elif path.endswith('.c'):
             reltarget = basename
         elif path.startswith('/Include/'):
@@ -242,7 +278,7 @@ def _resolve_applied_downloads(files, srcdir, incldir):
         if copy == 'copy':
             pass
         elif copy == 'dummy':
-            assert path in USE_SHIM, repr(path)
+            assert path in DUMMY or path in USE_SHIM, repr(path)
             downloaded = None
         elif copy == 'ignore':
             target = None
@@ -259,22 +295,24 @@ def apply_download(target, downloaded, fixer, backups):
     else:
         existing = None
 
+    minwidth = 57
+
     reltarget = os.path.relpath(target)
     if downloaded is None:
         if existing is not None:
             if not existing:
-                debug(f' ./{reltarget:40}  <- dummy')
+                debug(f' ./{reltarget:{minwidth}}  <- dummy')
             else:
-                debug(f' ./{reltarget:40}  (cleared)  <- dummy')
+                debug(f' ./{reltarget:{minwidth}}  (cleared)  <- dummy')
                 os.unlink(target)
                 _utils.touch(target)
         else:
-            debug(f' ./{reltarget:40}  (new)  <- dummy')
+            debug(f' ./{reltarget:{minwidth}}  (new)  <- dummy')
             _utils.touch(target)
         return
 
     if existing is None:
-        debug(f' ./{reltarget:40}  (new)  <- ./{os.path.relpath(downloaded)}')
+        debug(f' ./{reltarget:{minwidth}}  (new)  <- ./{os.path.relpath(downloaded)}')
         apply = fixer.match(downloaded)
         if apply is None:
             _utils.copy_file(downloaded, target)
@@ -285,7 +323,7 @@ def apply_download(target, downloaded, fixer, backups):
                 text = infile.read()
             text = apply(text)
     else:
-        debug(f' ./{reltarget:40}  <- ./{os.path.relpath(downloaded)}')
+        debug(f' ./{reltarget:{minwidth}}  <- ./{os.path.relpath(downloaded)}')
         with open(downloaded) as infile:
             text = infile.read()
         apply = fixer.match(downloaded)
@@ -309,6 +347,8 @@ class FileFixer:
     def register(basename, *alts, _fixes=_FIXES):
         def decorator(func):
             assert basename not in _fixes, (basename, _fixes)
+            if isinstance(func, staticmethod):
+                func = func.__func__
             _fixes[basename] = func
             for alt in alts:
                 assert alt not in _fixes, (alt, _fixes)
@@ -349,6 +389,34 @@ class FileFixer:
         text = text.replace(
             'from _xxinterpchannels import ',
             'from _interpchannels import ',
+        )
+        return text
+
+    @register('utils.py')
+    @register('test_api.py')
+    @register('test_lifecycle.py')
+    @register('test_stress.py')
+    @register('test_queues.py')
+    @register('test_channels.py')
+    def fix_tests_py(text):
+        text = text.replace(
+            'import _xxsubinterpreters as _interpreters',
+            'import _interpreters',
+        )
+        text = text.replace('_xxsubinterpreters', '_interpreters')
+        text = text.replace('_xxinterpqueues', '_interpqueues')
+        text = text.replace('_xxinterpchannels', '_interpchannels')
+        text = text.replace(
+            'from test.support import interpreters',
+            'import interpreters',
+        )
+        text = text.replace(
+            'from test.support.interpreters ',
+            'from interpreters ',
+        )
+        text = text.replace(
+            'test.support.interpreters.',
+            'interpreters.',
         )
         return text
 

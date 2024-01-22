@@ -1,10 +1,10 @@
 
 [DEFAULT]
-timestamp = 2024-01-10 03:59:43
+timestamp = 2024-01-18 02:39:04
 
 [upstream]
 repo = https://github.com/python/cpython
-revision = 5d8a3e74b51a59752f24cb869e7daa065b673f83
+revision = 8cda72037b262772399b2b7fc36dee9340d74fd6
 branch = main
 
 [files]
@@ -30,6 +30,19 @@ downloaded = {
     /Lib/interpreters/__init__.py                 -> src/orig/Lib/test/support/interpreters/__init__.py
     /Lib/interpreters/channels.py                 -> src/orig/Lib/test/support/interpreters/channels.py
     /Lib/interpreters/queues.py                   -> src/orig/Lib/test/support/interpreters/queues.py
+    /Lib/test/__init__.py                         -> src/orig/Lib/test/__init__.py
+    /Lib/test/support/__init__.py                 -> src/orig/Lib/test/support/__init__.py
+    /Lib/test/support/import_helper.py            -> src/orig/Lib/test/support/import_helper.py
+    /Lib/test/support/os_helper.py                -> src/orig/Lib/test/support/os_helper.py
+    /Lib/test/support/threading_helper.py         -> src/orig/Lib/test/support/threading_helper.py
+    /Lib/test/test_interpreters/__init__.py       -> src/orig/Lib/test/test_interpreters/__init__.py
+    /Lib/test/test_interpreters/__main__.py       -> src/orig/Lib/test/test_interpreters/__main__.py
+    /Lib/test/test_interpreters/test_api.py       -> src/orig/Lib/test/test_interpreters/test_api.py
+    /Lib/test/test_interpreters/test_channels.py  -> src/orig/Lib/test/test_interpreters/test_channels.py
+    /Lib/test/test_interpreters/test_lifecycle.py -> src/orig/Lib/test/test_interpreters/test_lifecycle.py
+    /Lib/test/test_interpreters/test_queues.py    -> src/orig/Lib/test/test_interpreters/test_queues.py
+    /Lib/test/test_interpreters/test_stress.py    -> src/orig/Lib/test/test_interpreters/test_stress.py
+    /Lib/test/test_interpreters/utils.py          -> src/orig/Lib/test/test_interpreters/utils.py
     /Modules/_interpchannelsmodule.c              -> src/orig/Modules/_xxinterpchannelsmodule.c
     /Modules/_interpqueuesmodule.c                -> src/orig/Modules/_xxinterpqueuesmodule.c
     /Modules/_interpretersmodule.c                -> src/orig/Modules/_xxsubinterpretersmodule.c
