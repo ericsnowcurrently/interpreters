@@ -13,7 +13,9 @@ extern int _PyCrossInterpreterData_RegisterClassLocal(
 static int
 ensure_xid_class(PyTypeObject *cls, crossinterpdatafunc getdata)
 {
-    assert(cls->tp_flags & Py_TPFLAGS_HEAPTYPE);
+    if (cls->tp_flags & _Py_TPFLAGS_STATIC_BUILTIN) {
+        return _PyCrossInterpreterData_RegisterClass(cls, getdata);
+    }
     PyInterpreterState *interp = PyInterpreterState_Get();
     return _PyCrossInterpreterData_RegisterClassLocal(interp, cls, getdata);
 }
