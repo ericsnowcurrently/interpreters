@@ -206,12 +206,23 @@ function check-built-modules() {
     )
 }
 
+function run-tests() {
+    local venvexe=$1
+
+    local topdir="$PROJECT_DIR/src"
+
+    (set -x
+    "$venvexe" -m unittest discover $topdir/tests/test_interpreters --top-level $topdir
+    )
+}
+
 
 #######################################
 # the script
 
 python=
 debug=false
+tests=
 
 function parse-cli() {
     local ci=false
@@ -219,12 +230,21 @@ function parse-cli() {
         case "$1" in
             --ci)
                 ci=true
+                if [ -z "$tess" ]; then
+                    tests=true
+                fi
                 ;;
             --debug)
                 debug=true
                 ;;
             --no-debug)
                 debug=false
+                ;;
+            --tests)
+                tests=true
+                ;;
+            --no-tests)
+                tests=false
                 ;;
             --*|-*)
                 fail "unsupported option '$1'"
@@ -242,6 +262,9 @@ function parse-cli() {
         esac
         shift
     done
+    if [ -z "$tests" ]; then
+        tests=false
+    fi
 
     # Validate the args.
     if [ -z "$python" ]; then
@@ -255,6 +278,10 @@ function parse-cli() {
 function main() {
     local python=$1
     local debug=$2
+    local tests=$3
+    if [ -z "$tests" ]; then
+        tests=false
+    fi
 
     set -e
 
@@ -298,10 +325,21 @@ function main() {
     echo
 
     check-built-modules "$venvexe" "$tarball"
+
+
+    if $tests; then
+        echo
+        echo "###################################################"
+        echo "# running tests"
+        echo "###################################################"
+        echo
+
+        run-tests "$venvexe"
+    fi
 }
 
 parse-cli "$@"
-main "$python" $debug
+main "$python" $debug $tests
 
 
 # vim: set filetype=sh :
