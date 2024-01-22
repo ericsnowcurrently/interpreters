@@ -111,7 +111,7 @@ function ensure-venv() {
 
     makedirs "$venvsdir"
 
-    local venvroot=$venvsdir/venv_build
+    local venvroot="$venvsdir/venv_build"
     local venvexe="$venvroot/bin/python3.12"
 
     if [ -d "$venvroot" ]; then
@@ -119,7 +119,7 @@ function ensure-venv() {
         (set -x
         rm -r "$venvroot"
         )
-    elif [ -d "$venvroot" ]; then
+    elif [ -e "$venvroot" ]; then
         (set -x
         rm "$venvroot"
         )
@@ -209,11 +209,9 @@ function check-built-modules() {
 function run-tests() {
     local venvexe=$1
 
-    local topdir="$PROJECT_DIR/src"
+    set -e
 
-    (set -x
-    "$venvexe" -m unittest discover $topdir/tests/test_interpreters --top-level $topdir
-    )
+    "$SCRIPTS_DIR/run-tests.sh" "$venvexe" --no-install
 }
 
 
@@ -311,7 +309,7 @@ function main() {
 
     echo
     echo "###################################################"
-    echo "# building the extension modules"
+    echo "# building the extension modules and dist package"
     echo "###################################################"
     echo
 
@@ -320,7 +318,7 @@ function main() {
 
     echo
     echo "###################################################"
-    echo "# checking the extension modules"
+    echo "# checking the built dist package"
     echo "###################################################"
     echo
 
@@ -328,12 +326,6 @@ function main() {
 
 
     if $tests; then
-        echo
-        echo "###################################################"
-        echo "# running tests"
-        echo "###################################################"
-        echo
-
         run-tests "$venvexe"
     fi
 }
