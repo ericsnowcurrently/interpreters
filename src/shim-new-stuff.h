@@ -61,6 +61,24 @@ extern PyLockStatus PyThread_acquire_lock_timed_with_retries(
 // pycore_pybuffer.h
 extern int _PyBuffer_ReleaseInInterpreterAndRawFree(PyInterpreterState *, Py_buffer *);
 
+// abstract.h
+#ifndef NDEBUG
+static int
+PyObject_HasAttrStringWithError(PyObject *obj, const char *name)
+{
+    PyObject *res = PyObject_GetAttrString(obj, name);
+    if (res == NULL) {
+        if (!PyErr_ExceptionMatches(PyExc_AttributeError)) {
+            return -1;
+        }
+        PyErr_Clear();
+        return 0;
+    }
+    Py_DECREF(res);
+    return 1;
+}
+#endif
+
 
 /*
 // pycore_crossinterp.h

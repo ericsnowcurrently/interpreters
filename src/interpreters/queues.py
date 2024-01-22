@@ -3,10 +3,10 @@
 import queue
 import time
 import weakref
-import _xxinterpqueues as _queues
+import _interpqueues as _queues
 
 # aliases:
-from _xxinterpqueues import (
+from _interpqueues import (
     QueueError, QueueNotFoundError,
 )
 

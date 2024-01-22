@@ -13,7 +13,7 @@ init_exceptions(PyInterpreterState *interp)
 
     // "PyExc_InterpreterError"
     exctype = PyErr_NewExceptionWithDoc(
-        "_interpreters.PyExc_InterpreterError",
+        "interpreters.InterpreterError",
         "A cross-interpreter operation failed",
         NULL, NULL);
     if (exctype == NULL) {
@@ -29,7 +29,7 @@ init_exceptions(PyInterpreterState *interp)
 
     // PyExc_InterpreterNotFoundError
     exctype = PyErr_NewExceptionWithDoc(
-        "_interpreters.PyExc_InterpreterNotFoundError",
+        "interpreters.InterpreterNotFoundError",
         "An interpreter was not found",
         basetype, NULL);
     if (exctype == NULL) {
@@ -44,7 +44,7 @@ init_exceptions(PyInterpreterState *interp)
 
     // NotShareableError
     exctype = PyErr_NewException(
-        "_interpreters.NotShareableError",
+        "interpreters.NotShareableError",
         PyExc_ValueError, NULL);
     if (exctype == NULL) {
         err = -1;
@@ -59,7 +59,6 @@ init_exceptions(PyInterpreterState *interp)
     err = 0;
 
 finally:
-    Py_DECREF(ns);
     return err;
 }
 
@@ -80,7 +79,6 @@ fini_exceptions(PyInterpreterState *interp)
     if (PyDict_DelItemString(ns, "PyExc_InterpreterNotFoundError") < 0) {
         PyErr_Clear();
     }
-    Py_DECREF(ns);
 }
 
 
@@ -94,7 +92,6 @@ _get_exctype(PyInterpreterState *interp, const char *name)
         return NULL;
     }
     PyObject *exctype = PyDict_GetItemString(ns, name);
-    Py_DECREF(ns);
     if (exctype == NULL) {
         assert(PyErr_Occurred());
         return NULL;
