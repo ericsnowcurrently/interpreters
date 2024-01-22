@@ -83,8 +83,6 @@ _capsule_fini(PyObject *capsule)
 static struct _xidregistry *
 _get_local_xidregistry(PyInterpreterState *interp)
 {
-    struct _xidregistry *reg = NULL;
-
     // Get the registry from PyInterpreterState.dict (or create it).
     PyObject *ns = PyInterpreterState_GetDict(interp);
     if (ns == NULL) {
@@ -94,6 +92,7 @@ _get_local_xidregistry(PyInterpreterState *interp)
         }
         return NULL;
     }
+
 #define INTERP_KEY "_xid_registry"
     PyObject *regobj = PyDict_GetItemString(ns, INTERP_KEY);
     if (regobj == NULL) {
@@ -104,36 +103,32 @@ _get_local_xidregistry(PyInterpreterState *interp)
         }
         regobj = PyDict_GetItemWithError(ns, key);
         Py_DECREF(key);
-        if (regobj == NULL) {
-            if (PyErr_Occurred()) {
-                return NULL;
-            }
-            // Create it and add the capsule.
-            reg = _new_local_xidregistry();
-            if (reg == NULL) {
-                return NULL;
-            }
-            regobj = PyCapsule_New(reg, NULL, _capsule_fini);
-            if (regobj == NULL) {
-                PyMem_RawFree(reg);
-                return NULL;
-            }
-            int res = PyDict_SetItemString(ns, INTERP_KEY, regobj);
-            Py_CLEAR(regobj);
-            if (res < 0) {
-                return NULL;
-            }
-        }
-    }
-    if (reg == NULL) {
-        assert(regobj != NULL);
-        reg = (struct _xidregistry *)PyCapsule_GetPointer(regobj, NULL);
-        Py_DECREF(regobj);
-        if (reg == NULL) {
+        if (regobj == NULL && PyErr_Occurred()) {
             return NULL;
         }
     }
-    Py_XDECREF(regobj);
+
+    struct _xidregistry *reg = NULL;
+    if (regobj != NULL) {
+        reg = (struct _xidregistry *)PyCapsule_GetPointer(regobj, NULL);
+        return reg;
+    }
+
+    // Create it and add the capsule.
+    reg = _new_local_xidregistry();
+    if (reg == NULL) {
+        return NULL;
+    }
+    regobj = PyCapsule_New(reg, NULL, _capsule_fini);
+    if (regobj == NULL) {
+        PyMem_RawFree(reg);
+        return NULL;
+    }
+    int res = PyDict_SetItemString(ns, INTERP_KEY, regobj);
+    Py_CLEAR(regobj);
+    if (res < 0) {
+        return NULL;
+    }
     return reg;
 }
 
