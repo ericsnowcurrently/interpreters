@@ -316,6 +316,42 @@ class FileFixer:
             return staticmethod(func)
         return decorator
 
+    @register('__init__.py')
+    def fix_interpreters_py(text):
+        text = text.replace(
+            'import _xxsubinterpreters as _interpreters',
+            'import _interpreters',
+        )
+        text = text.replace(
+            'from _xxsubinterpreters import ',
+            'from _interpreters import ',
+        )
+        return text
+
+    @register('queues.py')
+    def fix_queues_py(text):
+        text = text.replace(
+            'import _xxinterpqueues as _queues',
+            'import _interpqueues as _queues',
+        )
+        text = text.replace(
+            'from _xxinterpqueues import ',
+            'from _interpqueues import ',
+        )
+        return text
+
+    @register('channels.py')
+    def fix_channels_py(text):
+        text = text.replace(
+            'import _xxinterpchannels as _channels',
+            'import _interpchannels as _channels',
+        )
+        text = text.replace(
+            'from _xxinterpchannels import ',
+            'from _interpchannels import ',
+        )
+        return text
+
     @register('_interpretersmodule.c', '_xxsubinterpretersmodule.c')
     def fix__interpretersmodule_c(text):
         text = text.replace(
