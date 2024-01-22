@@ -104,6 +104,17 @@ function ensure-venv() {
     local venvroot=$venvsdir/venv_build
     local venvexe="$venvroot/bin/python3.12"
 
+    if [ -d "$venvroot" ]; then
+        # XXX Just make sure it's valid?
+        (set -x
+        rm -r "$venvroot"
+        )
+    elif [ -d "$venvroot" ]; then
+        (set -x
+        rm "$venvroot"
+        )
+    fi
+
     (set -x
     1>&2 "$python" -m venv "$venvroot"
     1>&2 "$venvexe" -m pip install --upgrade pip
@@ -175,7 +186,7 @@ function check-built-modules() {
     set -e
 
     (set -x
-    1>&2 "$venvexe" -m pip install "$tarball"
+    1>&2 "$venvexe" -m pip install --force-reinstall "$tarball"
     "$venvexe" -c 'import _interpreters'
     "$venvexe" -c 'import _interpchannels'
     "$venvexe" -c 'import _interpqueues'
