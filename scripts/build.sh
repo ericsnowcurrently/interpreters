@@ -7,9 +7,6 @@ SCRIPTS_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 PROJECT_DIR=$(dirname "$SCRIPTS_DIR")
 
 
-source "$SCRIPTS_DIR/_cpython.sh"
-
-
 function log() {
     1>&2 echo "$@"
 }
@@ -41,65 +38,30 @@ function makedirs() {
     fi
 }
 
+function check-python-feature-version() {
+    local python=$1
+    local expected=$2
+
+    if [ "$(echo "$expected" | grep -o -P '\b\d+\.\d+\b')" != "$expected" ]; then
+        err "bad expected version $expected"
+        return 1
+    fi
+
+    local version=$("$python" --version | grep -o -P '\b\d+\.\d+\b')
+    if [ -z "$version" ]; then
+        log "could not get version from $("$python" --version)"
+        log "  (proceeding as though it matched)"
+        return 0
+    elif [ "$version" != "$expected" ]; then
+        err "version mismatch ($version != $expected)"
+        return 1
+    fi
+    return 0
+}
+
 
 #######################################
 # sub-scripts
-
-function ensure-built-and-installed-cpython() {
-    local workdir=$1
-    shift
-    local debug=$1
-    shift
-    local debugarg='--no-debug'
-    if [ -n "$debug" ] && $debug; then
-        debugarg='--debug'
-    fi
-
-    set -e
-
-    local prefix="$workdir/cpython_3.12_install"
-    local installed="$prefix/bin/python3.12"
-    if [ -e "$installed" ]; then
-        log "locally built cpython found"
-        echo "$installed"
-        return 0
-    fi
-
-    # Check out and build it.
-    local reporoot="$workdir/cpython"
-    local builddir="$workdir/cpython_3.12_build"
-    log
-    log "###################################################"
-    log "# getting the local cpython repo ready"
-    log "#   repo root: $reporoot"
-    log "#   ref:       $ref"
-    log "###################################################"
-    log
-    if ! ensure-cpython-clone "$reporoot" 3.12; then
-        exit 1
-    fi
-
-    log
-    log "###################################################"
-    log "# building cpython locally"
-    log "#   build dir: $builddir"
-    log "#   prefix:    $prefix"
-    log "###################################################"
-    log
-    if ! build-cpython "$reporoot" "$prefix" "$builddir" "$debugarg" "$@"; then
-        exit 1
-    fi
-
-    log
-    log "###################################################"
-    log "# installing cpython locally"
-    log "#   prefix:    $prefix"
-    log "###################################################"
-    log
-    if ! _install-built-cpython "$builddir"; then
-        exit 1
-    fi
-}
 
 function ensure-cpython() {
     local python=$1
@@ -117,10 +79,9 @@ function ensure-cpython() {
     # Make sure $python is valid.
     if [ -z "$python" ]; then
         # XXX Look for it on $PATH?
-        python=$(ensure-built-and-installed-cpython "$workdir" $debug "$@")
-        if [ -z "$python" ]; then
-            exit 1
-        fi
+        # XXX Look for a locally-built cpython.
+        # XXX Build cpython locally.
+        fail "missing python arg"
     elif [ ! -e "$python" ]; then
         fail "bad python arg '$python'"
     else
