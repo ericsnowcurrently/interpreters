@@ -211,11 +211,16 @@ function check-built-modules() {
     local venvexe=$1
     local tarball=$2
 
+    set -e
+
     (set -x
     1>&2 "$venvexe" -m pip install "$tarball"
     "$venvexe" -c 'import _interpreters'
     "$venvexe" -c 'import _interpchannels'
     "$venvexe" -c 'import _interpqueues'
+    "$venvexe" -c 'import interpreters'
+    "$venvexe" -c 'import interpreters.queues'
+    "$venvexe" -c 'import interpreters.channels'
     )
 }
 
