@@ -7,49 +7,124 @@ SCRIPTS_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 PROJECT_DIR=$(dirname "$SCRIPTS_DIR")
 
 
+source "$SCRIPTS_DIR/_cpython.sh"
+
+
 function log() {
     1>&2 echo "$@"
 }
 
+function err() {
+    log "ERROR: $@"
+}
+
 function fail() {
-    1>&2 echo "ERROR: $@"
+    err "$@"
     exit 1
 }
 
-function check-python-version() {
-    local python=$1
-    local expected=$2
+function abspath() {
+    realpath --no-symlinks "$1"
+}
 
-    local version=$("$python" --version | grep -o -P '\b\d+\.\d+\b')
-    if [ -z "$version" ]; then
-        log "could not get version from $("$python" --version)"
-        log "  (proceeding as though it matched)"
+function makedirs() {
+    local dirname=$1
+
+    if [ -d "$dirname" ]; then
         return 0
-    elif [ "$version" != "$expected" ]; then
-        log "version mismatch ($version != $expected)"
-        return 1
+    elif [ -e "$dirname" ]; then
+        fail "$dirname exists but isn't a directory"
+    else
+        (set -x
+        1>&2 mkdir -p "$dirname"
+        )
     fi
-    return 0
 }
 
 
 #######################################
 # sub-scripts
 
+function ensure-built-and-installed-cpython() {
+    local workdir=$1
+    shift
+    local debug=$1
+    shift
+    local debugarg='--no-debug'
+    if [ -n "$debug" ] && $debug; then
+        debugarg='--debug'
+    fi
+
+    set -e
+
+    local prefix="$workdir/cpython_3.12_install"
+    local installed="$prefix/bin/python3.12"
+    if [ -e "$installed" ]; then
+        log "locally built cpython found"
+        echo "$installed"
+        return 0
+    fi
+
+    # Check out and build it.
+    local reporoot="$workdir/cpython"
+    local builddir="$workdir/cpython_3.12_build"
+    log
+    log "###################################################"
+    log "# getting the local cpython repo ready"
+    log "#   repo root: $reporoot"
+    log "#   ref:       $ref"
+    log "###################################################"
+    log
+    if ! ensure-cpython-clone "$reporoot" 3.12; then
+        exit 1
+    fi
+
+    log
+    log "###################################################"
+    log "# building cpython locally"
+    log "#   build dir: $builddir"
+    log "#   prefix:    $prefix"
+    log "###################################################"
+    log
+    if ! build-cpython "$reporoot" "$prefix" "$builddir" "$debugarg" "$@"; then
+        exit 1
+    fi
+
+    log
+    log "###################################################"
+    log "# installing cpython locally"
+    log "#   prefix:    $prefix"
+    log "###################################################"
+    log
+    if ! _install-built-cpython "$builddir"; then
+        exit 1
+    fi
+}
+
 function ensure-cpython() {
     local python=$1
-    local workdir=$2
+    shift
+    local workdir=$1
+    shift
+    local debug=$1
+    shift
+    if [ -z "$debug" ]; then
+        debug=false
+    fi
+
+    set -e
 
     # Make sure $python is valid.
     if [ -z "$python" ]; then
         # XXX Look for it on $PATH?
-        # XXX Look for a built one?
-        # XXX Build it.
-        fail "not implemented"
+        python=$(ensure-built-and-installed-cpython "$workdir" $debug "$@")
+        if [ -z "$python" ]; then
+            exit 1
+        fi
     elif [ ! -e "$python" ]; then
         fail "bad python arg '$python'"
     else
-        if ! check-python-version "$python" 3.12; then
+        if ! check-python-feature-version "$python" 3.12; then
             exit 1
         fi
     fi
@@ -61,7 +136,9 @@ function ensure-venv() {
     local venvsdir=$1
     local python=$2
 
-    mkdir -p "$venvsdir"
+    set -e
+
+    makedirs "$venvsdir"
 
     local venvroot=$venvsdir/venv_build
     local venvexe="$venvroot/bin/python3.12"
@@ -81,17 +158,26 @@ function ensure-venv() {
 function prep-build-venv() {
     local venvexe=$1
 
+    set -e
+
     (set -x
-    "$venvexe" -m pip install --upgrade setuptools
-    "$venvexe" -m pip install --upgrade wheel
-    "$venvexe" -m pip install --upgrade build
+    1>&2 "$venvexe" -m pip install --upgrade setuptools
+    1>&2 "$venvexe" -m pip install --upgrade wheel
+    1>&2 "$venvexe" -m pip install --upgrade build
     )
 }
 
 function build-package() {
     local venvexe=$1
+    local debug=$2
+    if [ -z "$debug" ]; then
+        debug=false
+    fi
+    # XXX Use $debug.
 
     local distdir="$PROJECT_DIR/dist"
+
+    set -e
 
     &>/dev/null pushd $PROJECT_DIR
 
@@ -126,7 +212,7 @@ function check-built-modules() {
     local tarball=$2
 
     (set -x
-    "$venvexe" -m pip install "$tarball"
+    1>&2 "$venvexe" -m pip install "$tarball"
     "$venvexe" -c 'import _interpreters'
     "$venvexe" -c 'import _interpchannels'
     "$venvexe" -c 'import _interpqueues'
@@ -138,6 +224,7 @@ function check-built-modules() {
 # the script
 
 python=
+debug=false
 
 function parse-cli() {
     local ci=false
@@ -145,6 +232,12 @@ function parse-cli() {
         case "$1" in
             --ci)
                 ci=true
+                ;;
+            --debug)
+                debug=true
+                ;;
+            --no-debug)
+                debug=false
                 ;;
             --*|-*)
                 fail "unsupported option '$1'"
@@ -154,7 +247,7 @@ function parse-cli() {
                 ;;
             *)
                 if [ -z "$python" ]; then
-                    python=$(realpath --no-symlinks "$1")
+                    python=$(abspath "$1")
                 else
                     fail "unsupported arg '$1'"
                 fi
@@ -174,10 +267,13 @@ function parse-cli() {
 
 function main() {
     local python=$1
+    local debug=$2
 
-    local workdir=$(realpath "$PROJECT_DIR/build")
+    set -e
 
-    python=$(ensure-cpython "$python" "$workdir")
+    local workdir=$(abspath "$PROJECT_DIR/build")
+
+    python=$(ensure-cpython "$python" "$workdir" $debug)
 
     # Do the build.
 
@@ -205,7 +301,7 @@ function main() {
     echo "###################################################"
     echo
 
-    local tarball=$(build-package "$venvexe" | jq --raw-output .tarball)
+    local tarball=$(build-package "$venvexe" $debug | jq --raw-output .tarball)
 
 
     echo
@@ -218,7 +314,7 @@ function main() {
 }
 
 parse-cli "$@"
-main "$python"
+main "$python" $debug
 
 
 # vim: set filetype=sh :
