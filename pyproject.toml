@@ -4,14 +4,14 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "interpreters_3_12"
+name = "interpreters_pep_734"
 version = "0.0.1.1"
 authors = [
   { name="Eric Snow", email="ericsnowcurrently@gmail.com" },
 ]
-description = "Use this module to try out multiple interpreters and a per-interpreter GIL in Python 3.12.  Do not use this for anything important."
+description = "Use this module to try out multiple interpreters and a per-interpreter GIL in Python 3.12+.  Do not use this for anything important."
 readme = "README.md"
-requires-python = "==3.12.*"
+requires-python = ">=3.12"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: BSD License",
