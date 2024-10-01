@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "interpreters_pep_734"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
   { name="Eric Snow", email="ericsnowcurrently@gmail.com" },
 ]
