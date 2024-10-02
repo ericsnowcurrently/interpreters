@@ -33,6 +33,7 @@ PY_FILES=(
 interpreters/__init__.py
 interpreters/channels.py
 interpreters/queues.py
+interpreters/_crossinterp.py
 )
 
 echo "# clearing old files"
