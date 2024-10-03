@@ -19,7 +19,7 @@ if [ "$req_ref" = '--' ]; then
 elif [ "$1" = '--' ]; then
     shift
 fi
-req_files="$@"
+req_files=("$@")
 
 
 # Gather metadata.
@@ -63,9 +63,22 @@ fi
 
 # Resolve the revision.
 
-cmd="curl --silent https://api.github.com/repos/python/cpython/commits/${requested}"
-echo "+ ${cmd} | jq -r .sha"
-revision=$($cmd | jq -r .sha)
+revision=
+function resolve-revision() {
+    local ref=$1
+    cmd="curl --fail --silent https://api.github.com/repos/python/cpython/commits/${ref}"
+    echo "+ ${cmd} | jq -r .sha"
+    revision=$($cmd | jq -r .sha)
+    if [ $? -ne 0 ]; then
+        revision=
+    fi
+}
+
+DEV_VERSION=3.14
+resolve-revision "$requested"
+if [ -z "$revision" -a "$branch" = "$DEV_VERSION" ]; then
+    resolve-revision main
+fi
 
 refname=
 if [ "$revision" != "$requested" ] && ! case "$revision" in $requested*) true;; *) false;; esac ; then
@@ -90,7 +103,18 @@ fi
 
 # Resolve the files.
 
-files="$req_files"
+FILES=(
+interpreters/__init__.py
+interpreters/channels.py
+interpreters/queues.py
+)
+
+files=("${req_files[@]}")
+files_label="${files[@]}"
+if [ -z "$files" ]; then
+    files=(${FILES[@]})
+    files_label='all'
+fi
 
 
 # Report.
@@ -99,7 +123,9 @@ echo
 echo "####################"
 echo "# Updating from upstream CPython"
 echo "# ref:      ${requested}"
-if [ "$revision" = "$last_revision" ]; then
+if [ -z "$revision" ]; then
+    echo "# revision: LOOKUP FAILED"
+elif [ "$revision" = "$last_revision" ]; then
     echo "# revision: ${revision}  (last)"
 else
     echo "# revision: ${revision}"
@@ -111,11 +137,7 @@ elif [ "$requested" = "$last_branch" ]; then
 else
     echo "# branch:   ${branch}"
 fi
-if [ -z "$files" ]; then
-    echo "# files:    all"
-else
-    echo "# files:    ${files}"
-fi
+echo "# files:    $files_label"
 echo "####################"
 echo
 
@@ -139,23 +161,86 @@ fi
 
 CPYTHON_DOWNLOAD="https://raw.githubusercontent.com/python/cpython/${revision}"
 DOWNLOAD_DIR=downloads
-DOWNLOAD_PY_FILES=(
-interpreters/__init__.py
-interpreters/channels.py
-interpreters/queues.py
-)
+
+interp_loc=
+case "$branch" in
+    #main) interp_loc='public';;
+    #3.26) interp_loc='public';;
+    main) interp_loc='private-public';;
+    3.14) interp_loc='private-public';;
+    3.13) interp_loc='private';;
+    3.*) echo "ERROR: unsupported branch $branch"; exit 1;;
+    "") interp_loc='';;
+    *) echo "ERROR: unsupported branch $branch"; exit 1;;
+esac
 
 echo "# clearing old files"
 rm -rf src/*
-for relfile in "${DOWNLOAD_PY_FILES[@]}"; do
+for relfile in "${files[@]}"; do
     mkdir -p $(dirname src/$relfile)
 done
 
+function download-file() {
+    local relfile=$1
+    shift
+    local locs=("$@")
+    if [ ${#locs[@]} -eq 0 ]; then
+        locs=('')
+    fi
+
+    if case "$relfile" in *.py) true;; *) false;; esac; then
+        baseurl="${CPYTHON_DOWNLOAD}/Lib"
+    else
+        baseurl="${CPYTHON_DOWNLOAD}"
+    fi
+
+    echo "# ++ $relfile"
+    echo "# ++++++++++++++++++++++++++++++++++++++"
+
+    rc=0
+    for loc in "${locs[@]}"; do
+        if [ $rc -ne 0 ]; then
+            echo '# falling back to alternate location'
+        fi
+
+        if [ -z "$loc" ]; then
+            target="${baseurl}/${relfile}"
+        else
+            target="${baseurl}/${loc}/${relfile}"
+        fi
+        (set -x
+        curl --fail -o "src/${relfile}" "${target}"
+        )
+        rc=$?
+        if [ $rc -eq 0 ]; then
+            break
+        fi
+    done
+
+    echo "# ++++++++++++++++++++++++++++++++++++++"
+
+    if [ $rc -ne 0 ]; then
+        echo
+        >&2 echo 'ERROR: download failed'
+        exit 1
+    fi
+}
+
+
 echo "# downloading from upstream"
-for relfile in "${DOWNLOAD_PY_FILES[@]}"; do
-    (set -x
-    curl -o "src/${relfile}" "${CPYTHON_DOWNLOAD}/Lib/test/support/${relfile}" 2>&1
-    )
+for relfile in "${files[@]}"; do
+    if [ "$(dirname $relfile)" = 'interpreters' ]; then
+        echo
+        case "$interp_loc" in
+            public) download-file "$relfile";;
+            private) download-file "$relfile" 'test/support';;
+            public-private) download-file "$relfile" '' 'test/support';;
+            private-public) download-file "$relfile" 'test/support' '';;
+            *) echo "#### unreachable ($interp_loc) ####"
+        esac
+    else
+        download-file "$relfile"
+    fi
 done
 
 
