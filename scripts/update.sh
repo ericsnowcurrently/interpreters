@@ -6,12 +6,19 @@ MAIN_VERSION='3.14'
 # project tree
 
 UPSTREAM_ROOT="src-upstream"
+CUSTOM_ROOT='src-custom'
 SOURCE_ROOT='src'
+
+CUSTOM_FILES=(
+interpreters.py
+interpreters_backport/__init__.py
+)
 
 UPSTREAM_FILES=(
 interpreters/__init__.py
 interpreters/channels.py
 interpreters/queues.py
+interpreters/_crossinterp.py
 )
 
 
@@ -255,13 +262,48 @@ echo -n "$branch" > $UPSTREAM_ROOT/CPYTHON_BRANCH
 echo -n "$version" > $UPSTREAM_ROOT/CPYTHON_VERSION
 
 
+# Apply custom files.
+
+echo
+echo "# copying custom files"
+for relfile in "${CUSTOM_FILES[@]}"; do
+    src="$CUSTOM_ROOT/$relfile"
+    dest="$SOURCE_ROOT/$relfile"
+    mkdir -p $(dirname $dest)
+    (set -x
+    cp -r "$src" "$dest"
+    )
+done
+
+echo
+echo "# writing the exported metadata"
+meta_branch=$branch
+if [ -z "$meta_branch" ]; then
+    meta_branch='None  # unknown'
+fi
+if [ -z "$version" ]; then
+    meta_version='None  # unknown'
+else
+    readarray -d '.' -t parts <<< "$version."
+    meta_version="(${parts[0]}, ${parts[1]})"
+fi
+cat > "$SOURCE_ROOT/interpreters_backport/metadata.py" << EOF
+# Generated from $UPSTREAM_ROOT/CPYTHON_REVISION:
+UPSTREAM_REVISION = '$revision'
+# Generated from $UPSTREAM_ROOT/CPYTHON_BRANCH:
+UPSTREAM_BRANCH = $meta_branch
+# Generated from $UPSTREAM_ROOT/CPYTHON_VERSION:
+UPSTREAM_VERSION = $meta_version
+EOF
+
+
 # Apply upstream files.
 
 echo
 echo "# copying upstream files"
 for i in ${!downloaded[@]}; do
     src=${downloaded[i]}
-    dest="$SOURCE_ROOT/${UPSTREAM_FILES[$i]}"
+    dest="$SOURCE_ROOT/interpreters_backport/${UPSTREAM_FILES[$i]}"
     mkdir -p $(dirname $dest)
     (set -x
     cp -r "$src" "$dest"
