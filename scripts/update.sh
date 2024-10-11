@@ -1,5 +1,19 @@
 #!/usr/bin/env bash
 
+MAIN_VERSION='3.14'
+
+
+# project tree
+
+UPSTREAM_ROOT="src-upstream"
+SOURCE_ROOT='src'
+
+UPSTREAM_FILES=(
+interpreters/__init__.py
+interpreters/channels.py
+interpreters/queues.py
+)
+
 
 # Parse the CLI.
 
@@ -19,22 +33,28 @@ if [ "$req_ref" = '--' ]; then
 elif [ "$1" = '--' ]; then
     shift
 fi
-req_files=("$@")
 
 
 # Gather metadata.
 
-if [ ! -e src/CPYTHON_BRANCH ]; then
-    last_branch=$(git show HEAD:src/CPYTHON_BRANCH)
+if [ ! -e $UPSTREAM_ROOT/CPYTHON_BRANCH ]; then
+    last_branch=$(2>/dev/null git show HEAD:$UPSTREAM_ROOT/CPYTHON_BRANCH)
 else
-    last_branch=$(cat src/CPYTHON_BRANCH)
+    last_branch=$(cat $UPSTREAM_ROOT/CPYTHON_BRANCH)
 fi
 last_branch=$(python3 -c "print('$last_branch'.strip(), end='')")
 
-if [ ! -e src/CPYTHON_REVISION ]; then
-    last_revision=$(git show HEAD:src/CPYTHON_REVISION)
+if [ ! -e $UPSTREAM_ROOT/CPYTHON_VERSION ]; then
+    last_version=$(2>/dev/null git show HEAD:$UPSTREAM_ROOT/CPYTHON_VERSION)
 else
-    last_revision=$(cat src/CPYTHON_REVISION)
+    last_version=$(cat $UPSTREAM_ROOT/CPYTHON_VERSION)
+fi
+last_version=$(python3 -c "print('$last_version'.strip(), end='')")
+
+if [ ! -e $UPSTREAM_ROOT/CPYTHON_REVISION ]; then
+    last_revision=$(2>/dev/null git show HEAD:$UPSTREAM_ROOT/CPYTHON_REVISION)
+else
+    last_revision=$(cat $UPSTREAM_ROOT/CPYTHON_REVISION)
 fi
 last_revision=$(python3 -c "print('$last_revision'.strip(), end='')")
 
@@ -45,19 +65,50 @@ indirect=
 case "$req_ref" in :) indirect=$req_ref;; esac
 
 branch=
+version=
 requested=$req_ref
-if [ -z "$requested" ]; then
+if [ -z "$requested" -o "$requested" == $MAIN_VERSION ]; then
     requested='main'
+fi
+if [ "$requested" == 'main' ]; then
     branch=$requested
+    version=$MAIN_VERSION
 elif case "$requested" in 3.*) true;; *) false;; esac; then
     branch=$requested
-elif [ "$requested" = ':LAST:' ]; then
+    version=$requested
+elif [ "$requested" = '.' ]; then
     requested=$last_branch
     if [ -n "$requested" ]; then
         branch=$requested
+        version=$last_version
     else
         requested=$last_revision
     fi
+elif [ "$requested" = '.branch' ]; then
+    requested=$last_branch
+    if [ -z "$requested" ]; then
+        >&2 echo "ERROR: no last branch"
+        exit 1
+    fi
+    branch=$requested
+    version=$last_version
+elif case "$requested" in .rev|.revision) true;; *) false;; esac; then
+    requested=$last_revision
+    branch=$last_branch
+    if [ -z "$requested" ]; then
+        >&2 echo "ERROR: no last revision"
+        exit 1
+    fi
+fi
+
+if [ -z "$version" -a -n "$branch" ]; then
+    version=$branch
+    if [ "$version" == 'main' ]; then
+        version=$MAIN_VERSION
+    fi
+fi
+if [ -z "$last_version" -a "$branch" = "$last_branch" ]; then
+    last_version=$version
 fi
 
 
@@ -74,11 +125,10 @@ function resolve-revision() {
     fi
 }
 
-DEV_VERSION=3.14
 resolve-revision "$requested"
-if [ -z "$revision" -a "$branch" = "$DEV_VERSION" ]; then
-    resolve-revision main
-fi
+#if [ -z "$revision" -a "$branch" = "$MAIN_VERSION" ]; then
+#    resolve-revision main
+#fi
 
 refname=
 if [ "$revision" != "$requested" ] && ! case "$revision" in $requested*) true;; *) false;; esac ; then
@@ -95,25 +145,14 @@ if [ "$revision" != "$requested" ] && ! case "$revision" in $requested*) true;; 
 else
     # The requested ref was a commit hash.
     refname=
-    if [ -z "$branch" -a "$revision" = "$last_revision" ]; then
-        branch=$last_branch
+    if [ "$revision" = "$last_revision" ]; then
+        if [ -z "$branch" ]; then
+            branch=$last_branch
+        fi
+        if [ -z "$version" ]; then
+            version=$last_version
+        fi
     fi
-fi
-
-
-# Resolve the files.
-
-FILES=(
-interpreters/__init__.py
-interpreters/channels.py
-interpreters/queues.py
-)
-
-files=("${req_files[@]}")
-files_label="${files[@]}"
-if [ -z "$files" ]; then
-    files=(${FILES[@]})
-    files_label='all'
 fi
 
 
@@ -132,12 +171,18 @@ else
 fi
 if [ -z "$branch" ]; then
     echo "# branch:   ???"
-elif [ "$requested" = "$last_branch" ]; then
+elif [ "$branch" = "$last_branch" ]; then
     echo "# branch:   ${branch}  (last)"
 else
     echo "# branch:   ${branch}"
 fi
-echo "# files:    $files_label"
+if [ -z "$version" ]; then
+    echo "# version:  ???"
+elif [ "$version" = "$last_version" ]; then
+    echo "# version:  ${version}  (last)"
+else
+    echo "# version:  $version"
+fi
 echo "####################"
 echo
 
@@ -157,101 +202,75 @@ if [ -n "$dryrun" ]; then
 fi
 
 
+# prep
+
+echo "# clearing old files"
+rm -rf $SOURCE_ROOT/*
+rm -rf $UPSTREAM_ROOT/*
+
+
 # Download the files.
 
 CPYTHON_DOWNLOAD="https://raw.githubusercontent.com/python/cpython/${revision}"
-DOWNLOAD_DIR=downloads
 
-interp_loc=
-case "$branch" in
-    #main) interp_loc='public';;
-    #3.26) interp_loc='public';;
-    main) interp_loc='private-public';;
-    3.14) interp_loc='private-public';;
-    3.13) interp_loc='private';;
-    3.*) echo "ERROR: unsupported branch $branch"; exit 1;;
-    "") interp_loc='';;
-    *) echo "ERROR: unsupported branch $branch"; exit 1;;
-esac
-
-echo "# clearing old files"
-rm -rf src/*
-for relfile in "${files[@]}"; do
-    mkdir -p $(dirname src/$relfile)
-done
-
-function download-file() {
+function resolve-upstream() {
     local relfile=$1
-    shift
-    local locs=("$@")
-    if [ ${#locs[@]} -eq 0 ]; then
-        locs=('')
+    local upstream=$relfile
+    # This special case goes away for the main branch once PEP 734 is done.
+    if case "$upstream" in interpreters/*) true;; *) false;; esac; then
+        upstream="test/support/$upstream"
     fi
-
-    if case "$relfile" in *.py) true;; *) false;; esac; then
-        baseurl="${CPYTHON_DOWNLOAD}/Lib"
-    else
-        baseurl="${CPYTHON_DOWNLOAD}"
+    if case "$upstream" in *.py) true;; *) false;; esac; then
+        upstream="Lib/$upstream"
     fi
+    echo "$upstream"
+}
 
+echo "# downloading from upstream"
+downloaded=()
+for relfile in "${UPSTREAM_FILES[@]}"; do
+    upstream=$(resolve-upstream $relfile)
+    outfile="$UPSTREAM_ROOT/$upstream"
+    url="${CPYTHON_DOWNLOAD}/$upstream"
     echo "# ++ $relfile"
     echo "# ++++++++++++++++++++++++++++++++++++++"
-
-    rc=0
-    for loc in "${locs[@]}"; do
-        if [ $rc -ne 0 ]; then
-            echo '# falling back to alternate location'
-        fi
-
-        if [ -z "$loc" ]; then
-            target="${baseurl}/${relfile}"
-        else
-            target="${baseurl}/${loc}/${relfile}"
-        fi
-        (set -x
-        curl --fail -o "src/${relfile}" "${target}"
-        )
-        rc=$?
-        if [ $rc -eq 0 ]; then
-            break
-        fi
-    done
-
+    mkdir -p $(dirname $outfile)
+    (set -x
+    curl --fail -o "$outfile" "$url"
+    )
+    rc=$?
     echo "# ++++++++++++++++++++++++++++++++++++++"
-
     if [ $rc -ne 0 ]; then
         echo
         >&2 echo 'ERROR: download failed'
         exit 1
     fi
-}
-
-
-echo "# downloading from upstream"
-for relfile in "${files[@]}"; do
-    if [ "$(dirname $relfile)" = 'interpreters' ]; then
-        echo
-        case "$interp_loc" in
-            public) download-file "$relfile";;
-            private) download-file "$relfile" 'test/support';;
-            public-private) download-file "$relfile" '' 'test/support';;
-            private-public) download-file "$relfile" 'test/support' '';;
-            *) echo "#### unreachable ($interp_loc) ####"
-        esac
-    else
-        download-file "$relfile"
-    fi
+    downloaded+=("$outfile")
 done
 
-
-# Update the metadata.
-
+echo
 echo "# updating metadata"
-echo -n $revision > src/CPYTHON_REVISION
-echo -n "$branch" > src/CPYTHON_BRANCH
+echo -n $revision > $UPSTREAM_ROOT/CPYTHON_REVISION
+echo -n "$branch" > $UPSTREAM_ROOT/CPYTHON_BRANCH
+echo -n "$version" > $UPSTREAM_ROOT/CPYTHON_VERSION
+
+
+# Apply upstream files.
+
+echo
+echo "# copying upstream files"
+for i in ${!downloaded[@]}; do
+    src=${downloaded[i]}
+    dest="$SOURCE_ROOT/${UPSTREAM_FILES[$i]}"
+    mkdir -p $(dirname $dest)
+    (set -x
+    cp -r "$src" "$dest"
+    )
+done
 
 
 # Update the repo.
 
-git add src
-2>/dev/null git add src/CPYTHON_BRANCH
+git add $SOURCE_ROOT
+git add $UPSTREAM_ROOT
+#2>/dev/null git add $SOURCE_ROOT/CPYTHON_BRANCH
