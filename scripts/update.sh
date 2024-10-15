@@ -10,8 +10,9 @@ CUSTOM_ROOT='src-custom'
 SOURCE_ROOT='src'
 
 CUSTOM_FILES=(
-interpreters.py
 interpreters_backport/__init__.py
+interpreters_experimental/__init__.py
+interpreters_experimental/interpreters/__init__.py
 )
 
 UPSTREAM_FILES=(
@@ -303,12 +304,23 @@ echo
 echo "# copying upstream files"
 for i in ${!downloaded[@]}; do
     src=${downloaded[i]}
-    dest="$SOURCE_ROOT/interpreters_backport/${UPSTREAM_FILES[$i]}"
+    if case "$src" in *channels.py) true;; *) false;; esac; then
+        dest="$SOURCE_ROOT/interpreters_experimental/${UPSTREAM_FILES[$i]}"
+    else
+        dest="$SOURCE_ROOT/interpreters_backport/${UPSTREAM_FILES[$i]}"
+    fi
     mkdir -p $(dirname $dest)
     (set -x
     cp -r "$src" "$dest"
     )
 done
+
+#echo
+#echo "# Applying fixes to copied upstream files"
+#sed -i 's/from . import _crossinterp/from interpreters_backport.interpreters import _crossinterp/' \
+#    "$SOURCE_ROOT/interpreters_experimental/interpreters/channels.py"
+#sed -i 's/from ._crossinterp /from interpreters_backport.interpreters._crossinterp /' \
+#    "$SOURCE_ROOT/interpreters_experimental/interpreters/channels.py"
 
 
 # Update the repo.

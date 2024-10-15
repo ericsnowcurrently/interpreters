@@ -9,8 +9,8 @@ Fixes
 Improvements
 ------------
 
+* [x] add interpreters_experimental module (start with interpreters.channels)
 * [ ] add InterpreterPoolExecutor
-* [ ] add interpreters_experimental module (start with interpreters.channels)
 * [ ] support for 3.12 (and outdated 3.13, if necessary)
 
 
@@ -19,6 +19,7 @@ Releases
 
 * [ ] ...
 * [ ] 0.4.0
+   * improvement: add interpreters_experimental and move interpreters.channels
    * improvement: add InterpreterPoolExecutor
 * [x] 0.3.0
    * improvement: interpreters_backports module with auto-install
