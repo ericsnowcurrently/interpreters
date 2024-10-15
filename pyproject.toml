@@ -11,7 +11,7 @@ authors = [
 ]
 description = "Use this module to try out multiple interpreters and a per-interpreter GIL in Python 3.13+.  Do not use this for anything important yet."
 readme = "README.md"
-requires-python = ">=3.13"  # We'll eventually targe 3.12+.
+requires-python = ">=3.13,<3.14"  # We'll eventually targe 3.12+.
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: BSD License",
