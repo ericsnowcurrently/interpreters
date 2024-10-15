@@ -1,0 +1,30 @@
+
+Fixes
+-----
+
+* [x] missing interpreters._crossinterp module
+* [ ] ...
+
+
+Improvements
+------------
+
+* [ ] add InterpreterPoolExecutor
+* [ ] add separate PyPI package without auto-install (for 3.13-3.14)
+* [ ] add interpreters_experimental module (start with interpreters.channels)
+* [ ] support for 3.12 (and outdated 3.13, if necessary)
+
+
+Releases
+--------
+
+* [ ] ...
+* [ ] 0.4.0
+   * improvement: add InterpreterPoolExecutor
+* [ ] 0.3.0
+   * improvement: interpreters_backports module with auto-install
+   * fix: add missing interpreters._crossinterp module
+* [x] 0.2.0
+   * fix: get the modules working again
+* [x] 0.1.0
+   * initial release at PyCon 2024
