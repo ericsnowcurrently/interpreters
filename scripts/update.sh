@@ -13,8 +13,6 @@ CUSTOM_FILES=(
 interpreters_backport/__init__.py
 interpreters_backport/concurrent/__init__.py
 interpreters_backport/concurrent/futures/__init__.py
-interpreters_backport/concurrent/futures/interpreter.py
-interpreters_backport/concurrent/futures/thread.py
 interpreters_experimental/__init__.py
 interpreters_experimental/interpreters/__init__.py
 )
@@ -24,8 +22,8 @@ interpreters/__init__.py
 interpreters/channels.py
 interpreters/queues.py
 interpreters/_crossinterp.py
-#concurrent/futures/interpreter.py
-#concurrent/futures/thread.py
+concurrent/futures/interpreter.py
+concurrent/futures/thread.py
 )
 
 
