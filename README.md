@@ -22,9 +22,10 @@ except ModuleNotFoundError:
     from interpreters_backports import interpreters
 
 try:
-    from interpreters import queues
+    import interpreters.queues
 except ModuleNotFoundError:
-    from interpreters_backports.interpreters import queues
+    import interpreters_backports.interpreters.queues
+    from interpreters_backports import interpreters
 
 try:
     from interpreters import channels
