@@ -18,7 +18,11 @@ Releases
 --------
 
 * [ ] ...
-* [ ] 0.4.0
+* [ ] 0.5.0
+   * 3.12 support
+* [ ] 0.4.1
+   * drop the 3.14 restriction
+* [x] 0.4.0
    * improvement: add interpreters_experimental and move interpreters.channels
    * improvement: add InterpreterPoolExecutor
 * [x] 0.3.0
