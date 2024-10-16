@@ -31,4 +31,9 @@ try:
     from interpreters import channels
 except ModuleNotFoundError:
     from interpreters_experimental.interpreters import channels
+
+try:
+    from concurrent.futures import ThreadPoolExecutor
+except ModuleNotFoundError:
+    from interpreters_backports.concurrent.futures import ThreadPoolExecutor
 ```

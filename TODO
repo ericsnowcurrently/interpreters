@@ -10,7 +10,7 @@ Improvements
 ------------
 
 * [x] add interpreters_experimental module (start with interpreters.channels)
-* [ ] add InterpreterPoolExecutor
+* [x] add InterpreterPoolExecutor
 * [ ] support for 3.12 (and outdated 3.13, if necessary)
 
 
