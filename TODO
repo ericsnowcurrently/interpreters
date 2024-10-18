@@ -14,6 +14,7 @@ Improvements
 * [ ] support for 3.12 (and outdated 3.13, if ever necessary)
 * [ ] add tests (copy from upstream?)
 * [ ] add CI (GitHub actions)
+* [ ] add wheels
 
 
 Releases
