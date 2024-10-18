@@ -11,7 +11,9 @@ Improvements
 
 * [x] add interpreters_experimental module (start with interpreters.channels)
 * [x] add InterpreterPoolExecutor
-* [ ] support for 3.12 (and outdated 3.13, if necessary)
+* [ ] support for 3.12 (and outdated 3.13, if ever necessary)
+* [ ] add tests (copy from upstream?)
+* [ ] add CI (GitHub actions)
 
 
 Releases
@@ -19,7 +21,7 @@ Releases
 
 * [ ] ...
 * [ ] 0.5.0
-   * 3.12 support
+   * 3.12 support?
 * [ ] 0.4.1
    * drop the 3.14 restriction
 * [x] 0.4.0
