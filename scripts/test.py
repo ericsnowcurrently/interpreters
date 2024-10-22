@@ -14,11 +14,15 @@ DIST_REGEX = re.compile(r"""
         (
 #            .*\/ ( \w+ ) - ( \d+ \. \d+ \. \d+ ) \.tar\.gz
             .*/
-            ( \w+ )  # <tb_name>
+            ( \w+ )  # <ar_name>
             -
-            ( \d+ \. \d+ \. \d+ )  # <tb_version>
-            \.tar\.gz
-         )  # <tarball>
+            ( \d+ \. \d+ \. \d+ )  # <ar_version>
+            (?:
+                \.tar\.gz
+                |
+                .*.whl
+             )
+         )  # <archive>
         |
         (?:
             ( \w+)  # <name>
@@ -34,15 +38,15 @@ def resolve_dist(dist):
     m = DIST_REGEX.match(dist)
     if not m:
         raise ValueError(f'invalid dist {dist!r}')
-    (tarball, tb_name, tb_version,
+    (archive, ar_name, ar_version,
      name, version,
      ) = m.groups()
-    if tarball:
-        name = tb_name
-        version = tb_version
+    if archive:
+        name = ar_name
+        version = ar_version
     else:
-        tarball = f'dist/{name}-{version}.tar.gz'
-    return tarball, name, version
+        archive = f'dist/{name}-{version}.tar.gz'
+    return archive, name, version
 
 
 def run(cmd, *args, quiet=False):

@@ -6,6 +6,8 @@ fi
 
 (set -x
 "$PYTHON" -m pip install --upgrade pip
+"$PYTHON" -m pip install --user --upgrade setuptools
+"$PYTHON" -m pip install --user --upgrade wheel
 "$PYTHON" -m pip install --user --upgrade build
 )
 
@@ -17,7 +19,7 @@ echo
 
 (set -x
 rm -rf dist/*.tar.gz
-"$PYTHON" -m build --sdist
+"$PYTHON" -m build --no-isolation
 )
 
 echo
