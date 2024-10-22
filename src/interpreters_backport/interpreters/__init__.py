@@ -2,7 +2,10 @@
 
 import threading
 import weakref
-import _interpreters
+try:
+    import _interpreters
+except ModuleNotFoundError:
+    from interpreters_backport import _interpreters
 
 # aliases:
 from _interpreters import (

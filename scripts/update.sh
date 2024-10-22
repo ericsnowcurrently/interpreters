@@ -319,12 +319,14 @@ for i in ${!downloaded[@]}; do
     )
 done
 
-#echo
-#echo "# Applying fixes to copied upstream files"
-#sed -i 's/from . import _crossinterp/from interpreters_backport.interpreters import _crossinterp/' \
-#    "$SOURCE_ROOT/interpreters_experimental/interpreters/channels.py"
-#sed -i 's/from ._crossinterp /from interpreters_backport.interpreters._crossinterp /' \
-#    "$SOURCE_ROOT/interpreters_experimental/interpreters/channels.py"
+echo
+echo "# Applying fixes to copied upstream files"
+sed -i 's/^import _interpreters$/try:\n    import _interpreters\nexcept ModuleNotFoundError:\n    from interpreters_backport import _interpreters/' \
+    "$SOURCE_ROOT/interpreters_backport/interpreters/__init__.py"
+sed -i 's/^import _interpqueues as _queues$/try:\n    import _interpqueues as _queues\nexcept ModuleNotFoundError:\n    from interpreters_backport import _interpqueues as _queues/' \
+    "$SOURCE_ROOT/interpreters_backport/interpreters/queues.py"
+sed -i 's/^import _interpchannels as _channels$/try:\n    import _interpchannels as _channels\nexcept ModuleNotFoundError:\n    from interpreters_experimental import _interpchannels as _channels/' \
+    "$SOURCE_ROOT/interpreters_experimental/interpreters/channels.py"
 
 
 # Update the repo.
