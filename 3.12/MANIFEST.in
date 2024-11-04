@@ -1,0 +1,12 @@
+include src/Include/*.h
+include src/Include/cpython/*.h
+include src/Include/internal/*.h
+include src/3.12/Include/internal/*.h
+include src/Python/*.c
+include src/Python/*.h
+include src/_interpreters_common.h
+
+include src/shim-compatible-includes.h
+include src/shim-new-stuff.h
+include src/runtimebackports.c
+include src/3.12/Objects/typeobject.c

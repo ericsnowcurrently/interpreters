@@ -11,10 +11,10 @@ Improvements
 
 * [x] add interpreters_experimental module (start with interpreters.channels)
 * [x] add InterpreterPoolExecutor
-* [ ] support for 3.12 (and outdated 3.13, if ever necessary)
+* [x] support for 3.12 (and outdated 3.13, if ever necessary)
+* [x] add wheels
 * [ ] add tests (copy from upstream?)
 * [ ] add CI (GitHub actions)
-* [x] add wheels
 
 
 Releases
@@ -22,8 +22,8 @@ Releases
 
 * [ ] ...
 * [ ] 0.5.0
-   * add a wheel
-   * 3.12 support?
+   * add wheels
+   * 3.12 support
 * [x] 0.4.1
    * drop the 3.14 restriction
 * [x] 0.4.0
