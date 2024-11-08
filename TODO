@@ -15,6 +15,7 @@ Improvements
 * [x] add wheels
 * [ ] add tests (copy from upstream?)
 * [ ] add CI (GitHub actions)
+* [ ] backport stdlib modules that are not cross-interp-compatible in 3.12 (e.g. datetime)
 
 
 Releases
