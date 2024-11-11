@@ -3,6 +3,7 @@ Fixes
 -----
 
 * [x] missing interpreters._crossinterp module
+* [ ] use the correct dependencies in backports_3.12/pyproject.toml
 * [ ] ...
 
 

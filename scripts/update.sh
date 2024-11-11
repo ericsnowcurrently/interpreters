@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+source scripts/bash-common.sh
+
+
 MAIN_VERSION='3.14'
 
 
@@ -9,7 +12,7 @@ UPSTREAM_ROOT="src-upstream"
 PENDING_ROOT="src-upstream-pending"
 CUSTOM_ROOT='src-custom'
 SOURCE_ROOT='src'
-ROOT_312='3.12'
+ROOT_312='backport_3.12'
 
 CUSTOM_FILES=(
 interpreters_backport/__init__.py
@@ -263,30 +266,6 @@ test -n "
 "
 
 # helpers
-
-function warn() {
-    >&2 echo "WARNING: $@"
-}
-
-function error() {
-    >&2 echo "ERROR: $@"
-}
-
-function fail() {
-    error "$@"
-    exit 1
-}
-
-function value-in-array() {
-    local value=$1
-    shift
-    local array=("$@")
-    if [[ " ${array[*]} " =~ [[:space:]]${value}[[:space:]] ]]; then
-        return 0;
-    else
-        return 1;
-    fi
-}
 
 function clear-unknown-files() {
     local rootdir=$1
@@ -859,11 +838,12 @@ function fix-up-source-trees() {
         else
             local dest="../$destdir/$relfile"
             mkdir -p $(dirname "$dest")
-            if case "$relfile" in *.py) true;; *) false;; esac; then
-                (set -x
-                cp "$relfile" "$dest"
-                )
-            else
+#            if case "$relfile" in *.py) true;; *) false;; esac; then
+#                (set -x
+#                cp "$relfile" "$dest"
+#                )
+#            else
+            if ! case "$relfile" in *.py) true;; *) false;; esac; then
                 (set -x
                 mv "$relfile" "$dest"
                 )

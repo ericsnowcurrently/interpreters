@@ -1,4 +1,8 @@
-This is the public implementation of PEP 734.
+This is the public pure-Python implementation of PEP 734,
+along with several other backports.
+
+For the implementation of the low-level modules, only on Python 3.12,
+see https://pypi.org/project/interpreters-3-12/.
 
 Nearly all development for this project is done in the upstream CPython repo.
 

@@ -95,6 +95,7 @@ def parse_args(argv=sys.argv[1:], prog=sys.argv[0]):
     import argparse
     parser = argparse.ArgumentParser(prog=prog)
 
+    parser.add_argument('--dependency', dest='deps', action='append')
     parser.add_argument('dist')
 
     args = parser.parse_args(argv)
@@ -103,7 +104,7 @@ def parse_args(argv=sys.argv[1:], prog=sys.argv[0]):
     return ns
 
 
-def main(dist):
+def main(dist, deps=None):
     target, pkgname, version = resolve_dist(dist)
 
     print(f'# testing {target}')
@@ -123,6 +124,21 @@ def main(dist):
             print('# found')
             run(venvexe, '-m', 'pip', 'install', '--upgrade', 'pip')
             break
+
+    if deps:
+        print()
+        print('# installing dependencies')
+        depnames = []
+        deptargets = []
+        for dep in deps:
+            deptarget, depname, _ = resolve_dist(dep)
+            if not os.path.exists(deptarget):
+                raise NotImplementedError(deptarget)
+            depnames.append(depname)
+            deptargets.append(deptarget)
+        run(venvexe, '-m', 'pip' ,'uninstall', '--yes', *depnames)
+        if run(venvexe, '-m', 'pip' ,'install', *deptargets) != 0:
+            print('# failed to install dependencies')
 
     print()
     print(f'# installing {target}')

@@ -4,6 +4,7 @@ import sys
 
 from setuptools import Extension, setup
 
+
 #Py_DEBUG = (os.getenv('Py_DEBUG') is not None)
 Py_DEBUG = hasattr(sys, 'gettotalrefcount')
 if Py_DEBUG:
@@ -31,6 +32,17 @@ EXT_COMMON = dict(
         #*([ '-g', '-Og'] if DEBUG else [])
     ],
 )
+
+#DEPENDENCIES = [
+#    'src/Python/interpconfig',
+#    'src/Python/crossinterp',
+#    'src/Python/lock',
+#    'src/Python/parking_lot',
+#    'src/runtimebackports',
+#    'src/3.12/Objects/typeobject',
+#]
+#EXTRA_SOURCES = [f'{v}.c' for v in DEPENDENCIES]
+#EXTRA_OBJECTS = [f'{v}.o' for v in DEPENDENCIES]
 SOURCES_COMMON = [
     'src/Python/interpconfig.c',
     'src/Python/crossinterp.c',
@@ -40,25 +52,29 @@ SOURCES_COMMON = [
     'src/3.12/Objects/typeobject.c',
 ]
 
-
 setup(
     ext_modules=[
         Extension(
             name='_interpreters',
             sources=['src/_interpretersmodule.c',
                      *SOURCES_COMMON],
+#                     *EXTRA_SOURCES],
             **EXT_COMMON,
         ),
         Extension(
             name='_interpqueues',
             sources=['src/_interpqueuesmodule.c',
                      *SOURCES_COMMON],
+#            sources=['src/_interpqueuesmodule.c'],
+#            extra_objects=EXTRA_OBJECTS,
             **EXT_COMMON,
         ),
         Extension(
             name='_interpchannels',
             sources=['src/_interpchannelsmodule.c',
                      *SOURCES_COMMON],
+#            sources=['src/_interpchannelsmodule.c'],
+#            extra_objects=EXTRA_OBJECTS,
             **EXT_COMMON,
         ),
     ],
