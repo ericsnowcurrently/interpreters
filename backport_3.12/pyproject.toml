@@ -1,0 +1,73 @@
+[build-system]
+# We use setuptools because hatchling doesn't build extension modules.
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "interpreters-3-12"
+version = "0.5.0"
+authors = [
+  { name="Eric Snow", email="ericsnowcurrently@gmail.com" },
+]
+description = "Do not use this directly.  Install and use interpreters-pep-734 instead."
+readme = "README.md"
+requires-python = "==3.12.*"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/ericsnowcurrently/interpreters"
+"Bug Tracker" = "https://github.com/ericsnowcurrently/interpreters/issues"
+
+[tool.hatch.envs.default]
+extra-dependencies = [
+  "black",
+  "pytest",
+  "ruff",
+  "mypy",
+]
+
+[tool.pytest.ini_options]
+minversion = "7.4.0"
+python_files = "*.py"  # Discover tests in every python file
+addopts = "-rA"
+
+[tool.mypy]
+ignore_missing_imports = true
+
+[tool.ruff]
+select = [
+  "A",
+  "B",
+  "C",
+  "DTZ",
+  "E",
+  "EM",
+  "F",
+  "FBT",
+  "I",
+  "ICN",
+  "ISC",
+  "N",
+  "PLC",
+  "PLE",
+  "PLR",
+  "PLW",
+  "Q",
+  "RUF",
+  "S",
+  "SIM",
+  "T",
+  "TID",
+  "UP",
+  "W",
+  "YTT",
+]
+ignore = [
+  "T201",  # "print" is OK
+  "S101",  # "assert" is OK
+  "E702",  # Statements on one line OK
+]

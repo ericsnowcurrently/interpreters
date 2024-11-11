@@ -4,7 +4,13 @@ import pickle
 import queue
 import time
 import weakref
-import _interpqueues as _queues
+try:
+    import _interpqueues as _queues
+except ModuleNotFoundError:
+    from interpreters_backport import _interpqueues as _queues
+    import sys
+    assert '_interpqueues' not in sys.modules, _queues
+    sys.modules['_interpqueues'] = _queues
 from . import _crossinterp
 
 # aliases:

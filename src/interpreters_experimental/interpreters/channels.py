@@ -1,7 +1,13 @@
 """Cross-interpreter Channels High Level Module."""
 
 import time
-import _interpchannels as _channels
+try:
+    import _interpchannels as _channels
+except ModuleNotFoundError:
+    from interpreters_experimental import _interpchannels as _channels
+    import sys
+    assert '_interpchannels' not in sys.modules, _channels
+    sys.modules['_interpchannels'] = _channels
 from . import _crossinterp
 
 # aliases:

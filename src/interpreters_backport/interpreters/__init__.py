@@ -2,7 +2,13 @@
 
 import threading
 import weakref
-import _interpreters
+try:
+    import _interpreters
+except ModuleNotFoundError:
+    from interpreters_backport import _interpreters
+    import sys
+    assert '_interpreters' not in sys.modules, _interpreters
+    sys.modules['_interpreters'] = _interpreters
 
 # aliases:
 from _interpreters import (

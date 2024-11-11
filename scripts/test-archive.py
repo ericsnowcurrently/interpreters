@@ -14,11 +14,15 @@ DIST_REGEX = re.compile(r"""
         (
 #            .*\/ ( \w+ ) - ( \d+ \. \d+ \. \d+ ) \.tar\.gz
             .*/
-            ( \w+ )  # <tb_name>
+            ( \w+ )  # <ar_name>
             -
-            ( \d+ \. \d+ \. \d+ )  # <tb_version>
-            \.tar\.gz
-         )  # <tarball>
+            ( \d+ \. \d+ \. \d+ )  # <ar_version>
+            (?:
+                \.tar\.gz
+                |
+                .*.whl
+             )
+         )  # <archive>
         |
         (?:
             ( \w+)  # <name>
@@ -34,15 +38,15 @@ def resolve_dist(dist):
     m = DIST_REGEX.match(dist)
     if not m:
         raise ValueError(f'invalid dist {dist!r}')
-    (tarball, tb_name, tb_version,
+    (archive, ar_name, ar_version,
      name, version,
      ) = m.groups()
-    if tarball:
-        name = tb_name
-        version = tb_version
+    if archive:
+        name = ar_name
+        version = ar_version
     else:
-        tarball = f'dist/{name}-{version}.tar.gz'
-    return tarball, name, version
+        archive = f'dist/{name}-{version}.tar.gz'
+    return archive, name, version
 
 
 def run(cmd, *args, quiet=False):
@@ -91,6 +95,7 @@ def parse_args(argv=sys.argv[1:], prog=sys.argv[0]):
     import argparse
     parser = argparse.ArgumentParser(prog=prog)
 
+    parser.add_argument('--dependency', dest='deps', action='append')
     parser.add_argument('dist')
 
     args = parser.parse_args(argv)
@@ -99,7 +104,7 @@ def parse_args(argv=sys.argv[1:], prog=sys.argv[0]):
     return ns
 
 
-def main(dist):
+def main(dist, deps=None):
     target, pkgname, version = resolve_dist(dist)
 
     print(f'# testing {target}')
@@ -119,6 +124,21 @@ def main(dist):
             print('# found')
             run(venvexe, '-m', 'pip', 'install', '--upgrade', 'pip')
             break
+
+    if deps:
+        print()
+        print('# installing dependencies')
+        depnames = []
+        deptargets = []
+        for dep in deps:
+            deptarget, depname, _ = resolve_dist(dep)
+            if not os.path.exists(deptarget):
+                raise NotImplementedError(deptarget)
+            depnames.append(depname)
+            deptargets.append(deptarget)
+        run(venvexe, '-m', 'pip' ,'uninstall', '--yes', *depnames)
+        if run(venvexe, '-m', 'pip' ,'install', *deptargets) != 0:
+            print('# failed to install dependencies')
 
     print()
     print(f'# installing {target}')
